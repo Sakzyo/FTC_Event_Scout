@@ -7,15 +7,16 @@ struct FTCEventScoutApp: App {
     @State private var model = AppModel()
 
     var body: some Scene {
-        WindowGroup("FTC Event Scout", id: "main") {
+        Window("FTC Event Scout", id: "main") {
             ContentView(model: model)
         }
         .defaultSize(width: 1_180, height: 760)
+        .defaultPosition(.center)
         .windowResizability(.contentMinSize)
         .windowToolbarStyle(.unified)
         .commands {
             CommandMenu("Scout") {
-                Button("Focus Event Code", action: model.focusEventCode)
+                Button("Load Event…", action: model.focusEventCode)
                     .keyboardShortcut("l", modifiers: .command)
 
                 Button("Reload Dashboard", action: model.reloadDashboard)
@@ -32,6 +33,7 @@ struct FTCEventScoutApp: App {
         Settings {
             SettingsView(model: model)
         }
+        .windowResizability(.contentSize)
     }
 }
 
@@ -39,5 +41,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        true
     }
 }

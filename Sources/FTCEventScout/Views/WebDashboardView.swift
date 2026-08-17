@@ -5,7 +5,8 @@ import WebKit
 struct WebDashboardView: NSViewRepresentable {
     let url: URL
     let reloadToken: Int
-    let focusToken: Int
+    let eventCode: String
+    let eventLoadToken: Int
 
     func makeCoordinator() -> Coordinator {
         Coordinator()
@@ -26,7 +27,7 @@ struct WebDashboardView: NSViewRepresentable {
         #endif
         context.coordinator.load(url, in: webView)
         context.coordinator.reloadToken = reloadToken
-        context.coordinator.focusToken = focusToken
+        context.coordinator.eventLoadToken = eventLoadToken
         return webView
     }
 
@@ -38,22 +39,50 @@ struct WebDashboardView: NSViewRepresentable {
             webView.reload()
         }
 
-        if context.coordinator.focusToken != focusToken {
-            context.coordinator.focusToken = focusToken
-            webView.evaluateJavaScript(
-                "document.getElementById('event-code')?.focus();"
-            )
+        if context.coordinator.eventLoadToken != eventLoadToken {
+            context.coordinator.eventLoadToken = eventLoadToken
+            context.coordinator.loadEvent(eventCode, in: webView)
         }
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate {
         var loadedURL: URL?
         var reloadToken = 0
-        var focusToken = 0
+        var eventLoadToken = 0
 
         func load(_ url: URL, in webView: WKWebView) {
             loadedURL = url
-            webView.load(URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData))
+            webView.load(URLRequest(url: nativeDashboardURL(from: url), cachePolicy: .reloadIgnoringLocalCacheData))
+        }
+
+        func loadEvent(_ eventCode: String, in webView: WKWebView) {
+            guard let data = try? JSONEncoder().encode([eventCode]),
+                  let json = String(data: data, encoding: .utf8) else {
+                return
+            }
+            let script = """
+                (() => {
+                    const code = (\(json))[0];
+                    const input = document.getElementById('event-code');
+                    if (!input) return;
+                    input.value = code;
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    const form = document.getElementById('event-form');
+                    if (form?.requestSubmit) form.requestSubmit();
+                    else document.getElementById('load-event-button')?.click();
+                })();
+                """
+            webView.evaluateJavaScript(script)
+        }
+
+        private func nativeDashboardURL(from url: URL) -> URL {
+            guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+                return url
+            }
+            var queryItems = components.queryItems ?? []
+            queryItems.append(URLQueryItem(name: "native", value: "1"))
+            components.queryItems = queryItems
+            return components.url ?? url
         }
 
         func webView(
@@ -79,6 +108,10 @@ struct WebDashboardView: NSViewRepresentable {
 
         func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
             webView.reload()
+        }
+
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation?) {
+            webView.evaluateJavaScript("document.documentElement.classList.add('native-shell');")
         }
     }
 }

@@ -64,6 +64,8 @@ python3 -m pip install -r requirements.txt
 
 On first launch, the macOS app shows a dedicated credential page when either the FIRST API username or token is missing. Enter both values and select **Save and Continue**. The app stores them in the macOS login Keychain and passes them only to its local server process. You can update them later from **FTC Event Scout > Settings** (⌘,).
 
+In the app, enter event codes from the native toolbar field and press Return. **Scout > Load Event…** (⌘L) focuses that field, **Reload Dashboard** (⌘R) reloads the current view, and **Restart Local Server** (⇧⌘R) cleanly relaunches the bundled backend. Settings opens in its own macOS window rather than interrupting the dashboard with a modal alert.
+
 The app automatically finds the newest installed Python 3 interpreter each time it starts. When the same Python version is installed in more than one location, it prefers the copy that can import the required `numpy` and `requests` packages. There is no Python preference to maintain. If Python or its required packages are unavailable, the app shows a dedicated recovery page before launching the server.
 
 For the command-line web server, create or update `credentials.env` in the project root:

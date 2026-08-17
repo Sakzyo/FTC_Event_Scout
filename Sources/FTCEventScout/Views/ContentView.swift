@@ -14,7 +14,8 @@ struct ContentView: View {
                 WebDashboardView(
                     url: url,
                     reloadToken: model.reloadToken,
-                    focusToken: model.focusToken
+                    eventCode: model.eventCode,
+                    eventLoadToken: model.eventLoadToken
                 )
             case .pythonRequired:
                 PythonRequiredView(retry: model.restartBackend)
@@ -29,13 +30,11 @@ struct ContentView: View {
             model.startIfNeeded()
         }
         .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
-                Button(action: model.focusEventCode) {
-                    Label("Focus Event Code", systemImage: "text.cursor")
-                }
-                .disabled(!model.isReady)
-                .help("Focus Event Code (⌘L)")
+            ToolbarItem(placement: .automatic) {
+                EventCodeToolbar(model: model)
+            }
 
+            ToolbarItemGroup(placement: .primaryAction) {
                 Button(action: model.reloadDashboard) {
                     Label("Reload", systemImage: "arrow.clockwise")
                 }
@@ -48,6 +47,25 @@ struct ContentView: View {
                 .help("Settings (⌘,)")
             }
         }
+    }
+}
+
+private struct EventCodeToolbar: View {
+    @Bindable var model: AppModel
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        TextField("Event code", text: $model.eventCode)
+            .frame(width: 190)
+            .focused($isFocused)
+            .onSubmit(model.loadEvent)
+            .onChange(of: model.focusToken) {
+                isFocused = model.isReady
+            }
+            .disabled(!model.isReady)
+            .accessibilityLabel("FTC event code")
+            .accessibilityHint("Enter an event code and press Return")
+            .help("Enter an event code and press Return (⌘L)")
     }
 }
 

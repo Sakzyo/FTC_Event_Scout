@@ -1,6 +1,7 @@
 #import <Cocoa/Cocoa.h>
 #import <Security/Security.h>
 #import <WebKit/WebKit.h>
+#import "FTCSettingsWindowController.h"
 
 static NSString *const FTCKeychainService = @"org.ftceventscout.credentials";
 static NSString *const FTCUsernameAccount = @"first-api-username";
@@ -271,16 +272,16 @@ typedef void (^FTCBackendCompletion)(NSURL *url, NSError *error);
 }
 
 - (void)finishWithURL:(NSURL *)url error:(NSError *)error {
+    __block FTCBackendCompletion completion = nil;
     @synchronized (self) {
         if (self.completed) {
             return;
         }
         self.completed = YES;
+        completion = [self.completion copy];
     }
     dispatch_async(dispatch_get_main_queue(), ^{
-        if (self.completion != nil) {
-            self.completion(url, error);
-        }
+        if (completion != nil) completion(url, error);
     });
 }
 
@@ -357,7 +358,7 @@ typedef void (^FTCBackendCompletion)(NSURL *url, NSError *error);
         if (data.length == 0) return;
         NSString *chunk = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] ?: @"";
         typeof(self) self = weakSelf;
-        if (self == nil) return;
+        if (self == nil || self.task != task) return;
         @synchronized (self.stdoutBuffer) {
             [self.stdoutBuffer appendString:chunk];
             NSRange newline;
@@ -377,13 +378,13 @@ typedef void (^FTCBackendCompletion)(NSURL *url, NSError *error);
         if (data.length == 0) return;
         NSString *chunk = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] ?: @"";
         typeof(self) self = weakSelf;
-        if (self != nil) {
+        if (self != nil && self.task == task) {
             @synchronized (self.stderrBuffer) { [self.stderrBuffer appendString:chunk]; }
         }
     };
     task.terminationHandler = ^(NSTask *finishedTask) {
         typeof(self) self = weakSelf;
-        if (self == nil || self.completed) return;
+        if (self == nil || self.task != finishedTask || self.completed) return;
         NSString *detail;
         @synchronized (self.stderrBuffer) { detail = [self.stderrBuffer copy]; }
         detail = [detail stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
@@ -403,11 +404,11 @@ typedef void (^FTCBackendCompletion)(NSURL *url, NSError *error);
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 15 * NSEC_PER_SEC),
                    dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
         typeof(self) self = weakSelf;
-        if (self == nil || self.completed || !self.task.running) return;
+        if (self == nil || self.task != task || self.completed || !task.running) return;
         NSError *error = [NSError errorWithDomain:@"FTCEventScout" code:FTCBackendErrorTimedOut
                                          userInfo:@{NSLocalizedDescriptionKey: @"The local server did not become ready within 15 seconds."}];
         [self finishWithURL:nil error:error];
-        [self.task terminate];
+        [task terminate];
     });
 }
 
@@ -424,15 +425,18 @@ typedef void (^FTCBackendCompletion)(NSURL *url, NSError *error);
 
 @end
 
-static NSToolbarItemIdentifier const FTCToolbarFocus = @"org.ftceventscout.toolbar.focus";
+static NSToolbarItemIdentifier const FTCToolbarEventSearch = @"org.ftceventscout.toolbar.event-search";
 static NSToolbarItemIdentifier const FTCToolbarReload = @"org.ftceventscout.toolbar.reload";
 static NSToolbarItemIdentifier const FTCToolbarSettings = @"org.ftceventscout.toolbar.settings";
 
-@interface FTCAppDelegate : NSObject <NSApplicationDelegate, NSWindowDelegate, NSToolbarDelegate, WKNavigationDelegate>
+@interface FTCAppDelegate : NSObject <NSApplicationDelegate, NSWindowDelegate, NSToolbarDelegate,
+    NSToolbarItemValidation, NSMenuItemValidation, WKNavigationDelegate>
 @property(nonatomic, strong) NSWindow *window;
 @property(nonatomic, strong) WKWebView *webView;
 @property(nonatomic, strong) FTCBackendController *backend;
 @property(nonatomic, strong) NSURL *dashboardURL;
+@property(nonatomic, strong) NSSearchField *eventSearchField;
+@property(nonatomic, strong) FTCSettingsWindowController *settingsWindowController;
 @property(nonatomic, strong) NSTextField *credentialUsernameField;
 @property(nonatomic, strong) NSSecureTextField *credentialTokenField;
 @property(nonatomic, strong) NSTextField *credentialStatusLabel;
@@ -454,10 +458,12 @@ static NSToolbarItemIdentifier const FTCToolbarSettings = @"org.ftceventscout.to
     self.window.title = @"FTC Event Scout";
     self.window.minSize = NSMakeSize(820, 560);
     self.window.delegate = self;
+    [self.window setFrameAutosaveName:@"FTCEventScoutMainWindow"];
     if (@available(macOS 11.0, *)) self.window.toolbarStyle = NSWindowToolbarStyleUnified;
     NSToolbar *toolbar = [[NSToolbar alloc] initWithIdentifier:@"FTCEventScoutToolbar"];
     toolbar.delegate = self;
     toolbar.displayMode = NSToolbarDisplayModeIconOnly;
+    toolbar.allowsUserCustomization = NO;
     self.window.toolbar = toolbar;
     [self.window center];
     [self.window makeKeyAndOrderFront:nil];
@@ -482,13 +488,39 @@ static NSToolbarItemIdentifier const FTCToolbarSettings = @"org.ftceventscout.to
     NSMenuItem *settings = [appMenu addItemWithTitle:@"Settings…" action:@selector(showSettings:) keyEquivalent:@","];
     settings.target = self;
     [appMenu addItem:[NSMenuItem separatorItem]];
+    NSMenuItem *services = [[NSMenuItem alloc] initWithTitle:@"Services" action:nil keyEquivalent:@""];
+    services.submenu = [[NSMenu alloc] initWithTitle:@"Services"];
+    NSApp.servicesMenu = services.submenu;
+    [appMenu addItem:services];
+    [appMenu addItem:[NSMenuItem separatorItem]];
+    [appMenu addItemWithTitle:@"Hide FTC Event Scout" action:@selector(hide:) keyEquivalent:@"h"];
+    NSMenuItem *hideOthers = [appMenu addItemWithTitle:@"Hide Others"
+                                                action:@selector(hideOtherApplications:)
+                                         keyEquivalent:@"h"];
+    hideOthers.keyEquivalentModifierMask = NSEventModifierFlagCommand | NSEventModifierFlagOption;
+    [appMenu addItemWithTitle:@"Show All" action:@selector(unhideAllApplications:) keyEquivalent:@""];
+    [appMenu addItem:[NSMenuItem separatorItem]];
     [appMenu addItemWithTitle:@"Quit FTC Event Scout" action:@selector(terminate:) keyEquivalent:@"q"];
     appRoot.submenu = appMenu;
     [mainMenu addItem:appRoot];
 
+    NSMenuItem *editRoot = [[NSMenuItem alloc] initWithTitle:@"Edit" action:nil keyEquivalent:@""];
+    NSMenu *editMenu = [[NSMenu alloc] initWithTitle:@"Edit"];
+    [editMenu addItemWithTitle:@"Undo" action:@selector(undo:) keyEquivalent:@"z"];
+    NSMenuItem *redo = [editMenu addItemWithTitle:@"Redo" action:@selector(redo:) keyEquivalent:@"z"];
+    redo.keyEquivalentModifierMask = NSEventModifierFlagCommand | NSEventModifierFlagShift;
+    [editMenu addItem:[NSMenuItem separatorItem]];
+    [editMenu addItemWithTitle:@"Cut" action:@selector(cut:) keyEquivalent:@"x"];
+    [editMenu addItemWithTitle:@"Copy" action:@selector(copy:) keyEquivalent:@"c"];
+    [editMenu addItemWithTitle:@"Paste" action:@selector(paste:) keyEquivalent:@"v"];
+    [editMenu addItemWithTitle:@"Delete" action:@selector(delete:) keyEquivalent:@""];
+    [editMenu addItemWithTitle:@"Select All" action:@selector(selectAll:) keyEquivalent:@"a"];
+    editRoot.submenu = editMenu;
+    [mainMenu addItem:editRoot];
+
     NSMenuItem *scoutRoot = [[NSMenuItem alloc] initWithTitle:@"Scout" action:nil keyEquivalent:@""];
     NSMenu *scoutMenu = [[NSMenu alloc] initWithTitle:@"Scout"];
-    NSMenuItem *focus = [scoutMenu addItemWithTitle:@"Focus Event Code" action:@selector(focusEventCode:) keyEquivalent:@"l"];
+    NSMenuItem *focus = [scoutMenu addItemWithTitle:@"Load Event…" action:@selector(focusEventCode:) keyEquivalent:@"l"];
     focus.target = self;
     NSMenuItem *reload = [scoutMenu addItemWithTitle:@"Reload Dashboard" action:@selector(reloadDashboard:) keyEquivalent:@"r"];
     reload.target = self;
@@ -501,6 +533,8 @@ static NSToolbarItemIdentifier const FTCToolbarSettings = @"org.ftceventscout.to
     NSMenu *windowMenu = [[NSMenu alloc] initWithTitle:@"Window"];
     [windowMenu addItemWithTitle:@"Minimize" action:@selector(performMiniaturize:) keyEquivalent:@"m"];
     [windowMenu addItemWithTitle:@"Zoom" action:@selector(performZoom:) keyEquivalent:@""];
+    [windowMenu addItem:[NSMenuItem separatorItem]];
+    [windowMenu addItemWithTitle:@"Bring All to Front" action:@selector(arrangeInFront:) keyEquivalent:@""];
     windowRoot.submenu = windowMenu;
     [mainMenu addItem:windowRoot];
     NSApp.windowsMenu = windowMenu;
@@ -508,6 +542,7 @@ static NSToolbarItemIdentifier const FTCToolbarSettings = @"org.ftceventscout.to
 }
 
 - (void)showCenteredTitle:(NSString *)title detail:(NSString *)detail retry:(BOOL)retry {
+    [self setDashboardControlsEnabled:NO];
     NSView *container = [[NSView alloc] initWithFrame:self.window.contentView.bounds];
     container.translatesAutoresizingMaskIntoConstraints = NO;
     NSTextField *titleLabel = [NSTextField labelWithString:title];
@@ -554,10 +589,16 @@ static NSToolbarItemIdentifier const FTCToolbarSettings = @"org.ftceventscout.to
         [self trimmedCredential:FTCKeychainRead(FTCTokenAccount)].length > 0;
 }
 
+- (void)setDashboardControlsEnabled:(BOOL)enabled {
+    self.eventSearchField.enabled = enabled;
+    [self.window.toolbar validateVisibleItems];
+}
+
 - (void)showCredentialSetup {
     [self.backend stop];
     self.dashboardURL = nil;
     self.webView = nil;
+    [self setDashboardControlsEnabled:NO];
 
     NSView *container = [[NSView alloc] initWithFrame:self.window.contentView.bounds];
     container.translatesAutoresizingMaskIntoConstraints = NO;
@@ -671,6 +712,7 @@ static NSToolbarItemIdentifier const FTCToolbarSettings = @"org.ftceventscout.to
 - (void)showPythonRequired {
     self.dashboardURL = nil;
     self.webView = nil;
+    [self setDashboardControlsEnabled:NO];
     NSView *container = [[NSView alloc] initWithFrame:self.window.contentView.bounds];
     container.translatesAutoresizingMaskIntoConstraints = NO;
     NSTextField *title = [NSTextField labelWithString:@"Python 3 Required"];
@@ -706,6 +748,7 @@ static NSToolbarItemIdentifier const FTCToolbarSettings = @"org.ftceventscout.to
 - (void)showPythonPackagesRequired:(NSString *)message {
     self.dashboardURL = nil;
     self.webView = nil;
+    [self setDashboardControlsEnabled:NO];
     NSView *container = [[NSView alloc] initWithFrame:self.window.contentView.bounds];
     container.translatesAutoresizingMaskIntoConstraints = NO;
     NSTextField *title = [NSTextField labelWithString:@"Python Packages Required"];
@@ -737,6 +780,15 @@ static NSToolbarItemIdentifier const FTCToolbarSettings = @"org.ftceventscout.to
 - (void)openPythonDownload:(id)sender {
     NSURL *url = [NSURL URLWithString:@"https://www.python.org/downloads/macos/"];
     if (url != nil) [NSWorkspace.sharedWorkspace openURL:url];
+}
+
+- (NSURL *)nativeDashboardURLFromURL:(NSURL *)url {
+    NSURLComponents *components = [NSURLComponents componentsWithURL:url resolvingAgainstBaseURL:NO];
+    if (components == nil) return url;
+    NSMutableArray<NSURLQueryItem *> *items = [components.queryItems mutableCopy] ?: [NSMutableArray array];
+    [items addObject:[NSURLQueryItem queryItemWithName:@"native" value:@"1"]];
+    components.queryItems = items;
+    return components.URL ?: url;
 }
 
 - (void)startBackend {
@@ -771,6 +823,7 @@ static NSToolbarItemIdentifier const FTCToolbarSettings = @"org.ftceventscout.to
         WKWebViewConfiguration *configuration = [[WKWebViewConfiguration alloc] init];
         WKWebView *webView = [[WKWebView alloc] initWithFrame:NSZeroRect configuration:configuration];
         self.webView = webView;
+        [self setDashboardControlsEnabled:YES];
         webView.navigationDelegate = self;
         webView.allowsMagnification = YES;
         if (@available(macOS 12.0, *)) webView.underPageBackgroundColor = NSColor.windowBackgroundColor;
@@ -784,79 +837,102 @@ static NSToolbarItemIdentifier const FTCToolbarSettings = @"org.ftceventscout.to
             [webView.topAnchor constraintEqualToAnchor:container.topAnchor],
             [webView.bottomAnchor constraintEqualToAnchor:container.bottomAnchor],
         ]];
-        [webView loadRequest:[NSURLRequest requestWithURL:url
+        [webView loadRequest:[NSURLRequest requestWithURL:[self nativeDashboardURLFromURL:url]
                                               cachePolicy:NSURLRequestReloadIgnoringLocalCacheData
                                           timeoutInterval:30]];
     }];
 }
 
 - (void)focusEventCode:(id)sender {
-    [self.webView evaluateJavaScript:@"document.getElementById('event-code')?.focus();" completionHandler:nil];
+    if (self.eventSearchField.enabled) {
+        [self.window makeFirstResponder:self.eventSearchField];
+    }
 }
 
 - (void)reloadDashboard:(id)sender { [self.webView reload]; }
 
+- (void)submitEventCode:(id)sender {
+    NSString *eventCode = [[self trimmedCredential:self.eventSearchField.stringValue] uppercaseString];
+    if (eventCode.length == 0 || self.webView == nil) {
+        NSBeep();
+        [self.window makeFirstResponder:self.eventSearchField];
+        return;
+    }
+    self.eventSearchField.stringValue = eventCode;
+
+    NSData *jsonData = [NSJSONSerialization dataWithJSONObject:@[eventCode] options:0 error:nil];
+    NSString *json = [[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding];
+    if (json == nil) return;
+    NSString *script = [NSString stringWithFormat:
+        @"(() => { const code = (%@)[0]; const input = document.getElementById('event-code'); "
+         "if (!input) return; input.value = code; input.dispatchEvent(new Event('input', { bubbles: true })); "
+         "const form = document.getElementById('event-form'); if (form?.requestSubmit) form.requestSubmit(); "
+         "else document.getElementById('load-event-button')?.click(); })();",
+        json];
+    [self.webView evaluateJavaScript:script completionHandler:nil];
+}
+
 - (void)showSettings:(id)sender {
-    NSAlert *alert = [[NSAlert alloc] init];
-    alert.messageText = @"FTC Event Scout Settings";
-    alert.informativeText = @"Credentials are stored in your login keychain and passed only to the local server.";
-    [alert addButtonWithTitle:@"Save and Restart"];
-    [alert addButtonWithTitle:@"Cancel"];
-
-    NSTextField *username = [[NSTextField alloc] init];
-    username.stringValue = FTCKeychainRead(FTCUsernameAccount);
-    NSSecureTextField *token = [[NSSecureTextField alloc] init];
-    token.stringValue = FTCKeychainRead(FTCTokenAccount);
-    username.placeholderString = @"FIRST API username";
-    token.placeholderString = @"FIRST API token";
-
-    NSGridView *grid = [NSGridView gridViewWithViews:@[
-        @[[NSTextField labelWithString:@"Username"], username],
-        @[[NSTextField labelWithString:@"Token"], token],
-    ]];
-    grid.rowSpacing = 8;
-    grid.columnSpacing = 10;
-    [grid columnAtIndex:0].xPlacement = NSGridCellPlacementTrailing;
-    [grid columnAtIndex:1].width = 330;
-    grid.frame = NSMakeRect(0, 0, 440, 64);
-    alert.accessoryView = grid;
-
-    if ([alert runModal] != NSAlertFirstButtonReturn) return;
-    NSString *trimmedUsername = [self trimmedCredential:username.stringValue];
-    NSString *trimmedToken = [self trimmedCredential:token.stringValue];
-    if (trimmedUsername.length == 0 || trimmedToken.length == 0) {
-        [self showCredentialSetup];
-        return;
+    NSString *username = FTCKeychainRead(FTCUsernameAccount);
+    NSString *token = FTCKeychainRead(FTCTokenAccount);
+    if (self.settingsWindowController == nil) {
+        __weak typeof(self) weakSelf = self;
+        self.settingsWindowController = [[FTCSettingsWindowController alloc]
+            initWithUsername:username
+                       token:token
+                 saveHandler:^BOOL(NSString *updatedUsername, NSString *updatedToken, NSError **error) {
+            typeof(self) self = weakSelf;
+            if (self == nil) return NO;
+            BOOL saved = FTCKeychainWrite(FTCUsernameAccount, updatedUsername, error) &&
+                FTCKeychainWrite(FTCTokenAccount, updatedToken, error);
+            if (saved) [self startBackend];
+            return saved;
+        }];
+        NSWindow *settingsWindow = self.settingsWindowController.window;
+        NSRect parent = self.window.frame;
+        NSRect frame = settingsWindow.frame;
+        frame.origin = NSMakePoint(NSMidX(parent) - NSWidth(frame) / 2,
+                                   NSMidY(parent) - NSHeight(frame) / 2);
+        [settingsWindow setFrame:frame display:NO];
+    } else {
+        [self.settingsWindowController updateUsername:username token:token];
     }
-    NSError *error = nil;
-    if (!FTCKeychainWrite(FTCUsernameAccount, trimmedUsername, &error) ||
-        !FTCKeychainWrite(FTCTokenAccount, trimmedToken, &error)) {
-        NSAlert *failure = [NSAlert alertWithError:error];
-        [failure runModal];
-        return;
-    }
-    [self startBackend];
+    [self.settingsWindowController showWindow:nil];
+    [self.settingsWindowController.window makeKeyAndOrderFront:nil];
 }
 
 - (NSArray<NSToolbarItemIdentifier> *)toolbarAllowedItemIdentifiers:(NSToolbar *)toolbar {
-    return @[NSToolbarFlexibleSpaceItemIdentifier, FTCToolbarFocus, FTCToolbarReload, FTCToolbarSettings];
+    return @[NSToolbarFlexibleSpaceItemIdentifier, FTCToolbarEventSearch, FTCToolbarReload, FTCToolbarSettings];
 }
 
 - (NSArray<NSToolbarItemIdentifier> *)toolbarDefaultItemIdentifiers:(NSToolbar *)toolbar {
-    return @[NSToolbarFlexibleSpaceItemIdentifier, FTCToolbarFocus, FTCToolbarReload, FTCToolbarSettings];
+    return @[NSToolbarFlexibleSpaceItemIdentifier, FTCToolbarEventSearch, FTCToolbarReload, FTCToolbarSettings];
 }
 
 - (NSToolbarItem *)toolbar:(NSToolbar *)toolbar
        itemForItemIdentifier:(NSToolbarItemIdentifier)identifier
    willBeInsertedIntoToolbar:(BOOL)flag {
+    if ([identifier isEqualToString:FTCToolbarEventSearch]) {
+        NSSearchToolbarItem *searchItem = [[NSSearchToolbarItem alloc] initWithItemIdentifier:identifier];
+        searchItem.label = @"Event Code";
+        searchItem.toolTip = @"Enter an event code and press Return (⌘L)";
+        searchItem.preferredWidthForSearchField = 220;
+        searchItem.resignsFirstResponderWithCancel = YES;
+        NSSearchField *searchField = searchItem.searchField;
+        searchField.placeholderString = @"Event code";
+        searchField.accessibilityLabel = @"FTC event code";
+        searchField.recentsAutosaveName = @"FTCEventScoutRecentEventCodes";
+        searchField.maximumRecents = 10;
+        searchField.target = self;
+        searchField.action = @selector(submitEventCode:);
+        searchField.enabled = self.webView != nil;
+        self.eventSearchField = searchField;
+        return searchItem;
+    }
+
     NSToolbarItem *item = [[NSToolbarItem alloc] initWithItemIdentifier:identifier];
     item.target = self;
-    if ([identifier isEqualToString:FTCToolbarFocus]) {
-        item.label = @"Event Code";
-        item.toolTip = @"Focus Event Code (⌘L)";
-        item.image = [NSImage imageWithSystemSymbolName:@"text.cursor" accessibilityDescription:@"Focus Event Code"];
-        item.action = @selector(focusEventCode:);
-    } else if ([identifier isEqualToString:FTCToolbarReload]) {
+    if ([identifier isEqualToString:FTCToolbarReload]) {
         item.label = @"Reload";
         item.toolTip = @"Reload Dashboard (⌘R)";
         item.image = [NSImage imageWithSystemSymbolName:@"arrow.clockwise" accessibilityDescription:@"Reload"];
@@ -868,6 +944,29 @@ static NSToolbarItemIdentifier const FTCToolbarSettings = @"org.ftceventscout.to
         item.action = @selector(showSettings:);
     }
     return item;
+}
+
+- (BOOL)validateToolbarItem:(NSToolbarItem *)item {
+    if ([item.itemIdentifier isEqualToString:FTCToolbarReload]) return self.webView != nil;
+    return YES;
+}
+
+- (BOOL)validateMenuItem:(NSMenuItem *)item {
+    if (item.action == @selector(focusEventCode:) || item.action == @selector(reloadDashboard:)) {
+        return self.webView != nil;
+    }
+    return YES;
+}
+
+- (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
+    [webView evaluateJavaScript:
+        @"document.documentElement.classList.add('native-shell'); "
+         "document.getElementById('event-code')?.value || '';"
+        completionHandler:^(id result, NSError *error) {
+        if ([result isKindOfClass:NSString.class] && [result length] > 0) {
+            self.eventSearchField.stringValue = result;
+        }
+    }];
 }
 
 - (void)webView:(WKWebView *)webView

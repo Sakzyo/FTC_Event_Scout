@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>FTC Event OPR Scout</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <script>
+    if (new URLSearchParams(window.location.search).get("native") === "1") {
+      document.documentElement.classList.add("native-shell");
+    }
+  </script>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>

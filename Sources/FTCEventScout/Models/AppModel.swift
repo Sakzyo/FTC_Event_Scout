@@ -17,9 +17,11 @@ final class AppModel {
     var launchState: LaunchState = .idle
     var username: String
     var token: String
+    var eventCode = ""
     var settingsMessage: String?
     private(set) var reloadToken = 0
     private(set) var focusToken = 0
+    private(set) var eventLoadToken = 0
 
     private let backendService = BackendService()
 
@@ -56,6 +58,14 @@ final class AppModel {
     func focusEventCode() {
         guard isReady else { return }
         focusToken += 1
+    }
+
+    func loadEvent() {
+        guard isReady else { return }
+        let normalized = eventCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard !normalized.isEmpty else { return }
+        eventCode = normalized
+        eventLoadToken += 1
     }
 
     func saveSettings() {

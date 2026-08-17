@@ -49,6 +49,7 @@ else
     -fmodules-cache-path="$BUILD_ROOT/clang-module-cache-objc" \
     -mmacosx-version-min=14.0 "${CLANG_OPT[@]}" \
     "$ROOT_DIR/Sources/AppKitFallback/main.m" \
+    "$ROOT_DIR/Sources/AppKitFallback/FTCSettingsWindowController.m" \
     -o "$FALLBACK_DIR/$EXECUTABLE_NAME" \
     -framework Cocoa -framework WebKit -framework Security
   BUILD_BINARY="$FALLBACK_DIR/$EXECUTABLE_NAME"

@@ -92,6 +92,20 @@ summary:focus-visible {
 
 .card { background: var(--surface); }
 
+html.native-shell .header,
+html.native-shell .controls,
+html.native-shell .footer {
+  display: none;
+}
+
+html.native-shell .status {
+  padding-inline: 16px;
+}
+
+html.native-shell .content-layout {
+  min-height: calc(100vh - 38px);
+}
+
 .header {
   padding: 24px 28px 15px;
   border-bottom: 1px solid var(--line);
