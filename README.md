@@ -1,111 +1,165 @@
 # FTC Event Scout
 
-FTC Event Scout is a native macOS SwiftUI app for reviewing FIRST Tech Challenge events. It refreshes event results from FIRST, calculates team Offensive Power Rating (OPR), and presents rankings, event highlights, team match histories, score breakdowns, historical pre-event previews, and Mac-local scouting tags with standard macOS controls.
+FTC Event Scout is a native macOS SwiftUI application developed by Dylan from team #19600 Treeman for inspecting FIRST Tech Challenge events. It downloads match and score data from FIRST Events, calculates several Offensive Power Rating (OPR) estimates, and presents the results through native macOS tables, sidebars, toolbars, settings, and sheets.
 
-SwiftUI owns all presentation, navigation, interaction, and persistence. A small loopback-only Python process performs upstream data retrieval and OPR calculation through a JSON API; it serves no user interface.
+The visible application is entirely SwiftUI. A bundled, loopback-only Python helper retrieves upstream data, writes disposable CSV files, and performs the OPR calculations. It does not serve HTML or any other user interface.
+
+## What is OPR?
+
+Offensive Power Rating estimates a team's average contribution to its alliance's score. Each alliance appearance becomes an equation in which the participating teams' estimated contributions add up to the alliance score; OPR is the least-squares solution across those equations.
+
+OPR is an estimate rather than an official event ranking or a direct measurement of an individual robot. Partner schedules, defense, penalties, game design, and limited match data can all affect it. For a worked explanation, see [The Math Behind OPR — An Introduction](https://blog.thebluealliance.com/2017/10/05/the-math-behind-opr-an-introduction/).
+
+This project calculates:
+
+- Total OPR from final alliance scores
+- Non-penalty OPR when penalty details are available
+- Autonomous OPR
+- Teleop-only OPR
+- Endgame OPR
+
+The calculator solves the normal equations with partial-pivot Gaussian elimination. If an event schedule produces a rank-deficient system, it applies a small deterministic ridge term before retrying.
+
+## Current features
+
+- Native `NavigationSplitView` navigation with Rankings and Highlights sections
+- Sortable live-event rankings for event rank, team number, and every calculated OPR metric
+- Pre-event FTCScout previews with team names, historical OPR, best season, recent seasons, and rookie year
+- Highest final, non-penalty, autonomous, and teleop alliance-score highlights, including ties
+- Per-team match-history sheets with results, partners, opponents, scores, and scouting tags
+- Centered score-breakdown controls for every match; breakdowns start collapsed and can be opened with the mouse or keyboard
+- Detailed red/blue score breakdowns for autonomous, driver-controlled, endgame, foul, and final-score fields supplied by FIRST
+- Event/team-scoped scouting tags stored locally on the Mac
+- Team numbers rendered as identifiers without thousands separators—for example, `10435`, not `10,435`
+- Dedicated first-launch credential page, native Settings window, toolbar actions, and macOS menu commands
 
 ## Requirements
 
 - macOS 14 or later
-- A current Xcode installation for building the app
-- The latest Python 3 installed on the Mac
-- Internet access for FIRST Events and FTCScout
-- FIRST Events API credentials
+- A current Xcode installation for compiling the Swift package
+- A discoverable Python 3 installation
+- Internet access to FIRST Events and, for pre-event previews, FTCScout
+- A FIRST Events API username and token
 
-The Python helper uses only the standard library. There are no pip packages or Python interpreter settings to maintain. At startup, the app selects the newest Python 3 it can find and shows an installation page if none is available.
+The Python helper uses only the Python standard library. There are no pip dependencies, virtual environments, or user-configurable interpreter paths. At runtime, the app searches common package-manager, framework, Conda, pyenv, asdf, mise, and `PATH` locations and selects the newest Python 3 version it finds. If no Python 3 interpreter is available, the app presents an installation page.
 
 ## Build and run
+
+From the repository root:
 
 ```bash
 ./script/build_and_run.sh
 ```
 
-This builds, ad-hoc signs, packages, and launches `dist/FTC Event Scout.app`. Other useful modes are:
+This stops an existing FTC Event Scout process and helper, builds the debug configuration, assembles and ad-hoc signs `dist/FTC Event Scout.app`, and launches a fresh instance.
+
+Additional modes:
 
 ```bash
-./script/build_and_run.sh --verify
-./script/build_and_run.sh --debug
-./script/build_and_run.sh --logs
+./script/build_and_run.sh --verify     # launch and verify that the app remains running
+./script/build_and_run.sh --debug      # start the packaged executable under LLDB
+./script/build_and_run.sh --logs       # launch and stream process logs
+./script/build_and_run.sh --telemetry  # launch and stream app-subsystem telemetry
 ```
 
-Package without launching with `./script/package_app.sh debug` or `./script/package_app.sh release`.
+Package without launching:
 
-The packager intentionally builds the single native implementation only. If the active Swift compiler and macOS SDK do not match, install a current Xcode release and select it with `xcode-select` before rebuilding.
+```bash
+./script/package_app.sh debug
+./script/package_app.sh release
+```
 
-## First launch and credentials
+The generated bundle is ad-hoc signed for local use; it is not Developer ID signed or notarized for distribution. Build output is written to `.build/swift-build.log`. The packager distinguishes source compilation failures from an incompatible selected Xcode toolchain and retries without SwiftPM's nested sandbox when running inside an already-sandboxed environment.
 
-When either FIRST API credential is absent, the app opens a dedicated setup page. Credentials are stored in the macOS login Keychain. Update them later in **FTC Event Scout > Settings** (⌘,).
+## First launch and normal use
 
-Enter an event code in the native toolbar and press Return. **Scout > Load Event…** (⌘L) focuses the field, **Refresh Event** (⌘R) refreshes the current event, and **Restart Data Service** (⇧⌘R) relaunches the local helper.
+If either FIRST Events credential is absent from the Keychain, the app opens a separate credential page before starting the local helper. Credentials can later be changed in **FTC Event Scout > Settings** (`⌘,`). A `401 Unauthorized` response means FIRST rejected the stored username/token pair.
 
-A FIRST `401 Unauthorized` response means the saved API username or token was rejected. Open Settings, verify both values, and save again.
+After the helper is ready:
 
-## Native architecture
+1. Enter a 2–24 character alphanumeric event code in the toolbar.
+2. Press Return or select the Load button.
+3. Select a team number in a live ranking to open its match history.
+4. Select the centered **Score Breakdown** control within a match to reveal its red/blue details.
+
+Available commands:
+
+- **Scout > Load Event…** (`⌘L`) focuses the event-code field.
+- **Scout > Refresh Event** (`⌘R`) regenerates the current event data.
+- **Scout > Restart Data Service** (`⇧⌘R`) restarts the Python helper.
+
+## Data flow
 
 ```text
-SwiftUI toolbar and NavigationSplitView
-                    |
-                    v
-        POST /api/generate-opr on loopback
-                    |
-       +------------+-------------+
-       |                          |
-       v                          v
-FIRST Events API           FTCScout preview
-       |
+Native SwiftUI toolbar and views
+                |
+                | POST /api/generate-opr
+                v
+Loopback Python service on 127.0.0.1
+                |
+       +--------+---------+
+       |                  |
+       v                  v
+FIRST Events API     FTCScout GraphQL
+       |                  |
+       |                  +--> historical pre-event preview
        v
-match CSV -> OPR calculation -> native SwiftUI tables, sheets, and highlights
+match/score data --> CSV generation --> OPR calculation
+                                         |
+                                         v
+                         native rankings, highlights,
+                         match history, and score details
 ```
 
-The app uses macOS storage conventions:
+For events with played matches, the helper requests both qualification and playoff match/score endpoints, writes match-detail and OPR CSV files, and returns their location to the Swift client. For a registered event with no matches, it requests the registered teams and historical quick statistics from FTCScout instead.
 
-- Credentials: login Keychain
+The active season is currently `2025` in `scrape.py` and `historical_opr.py`. `historical_opr.py` searches seasons 2019–2025 for each team's highest historical OPR, while the current preview table displays 2023–2025 explicitly. These constants and columns must be updated when the target FTC season changes.
+
+## Local storage and security
+
+- FIRST Events credentials: macOS login Keychain
 - Team tags: `~/Library/Application Support/FTC Event Scout/team-tags.json`
-- UI preferences: `UserDefaults`
-- Regenerable match and OPR CSV files: `~/Library/Caches/FTC Event Scout/`
+- Last event and sort preferences: `UserDefaults`
+- Regenerable match and OPR CSVs: `~/Library/Caches/FTC Event Scout/`
 
-Team tags are scoped to an event/team pair. Settings can clear cached event data without deleting tags or credentials.
+The helper receives credentials only through its process environment and binds only to `127.0.0.1`. It chooses an available local port at startup. Clearing the event cache in Settings removes regenerable CSV data without deleting Keychain credentials or team tags. Missing bundled seed CSV files are staged in the cache and can subsequently be refreshed from FIRST.
 
 ## Project structure
 
 ```text
 Package.swift
 Sources/FTCEventScout/
-  App/                         SwiftUI scenes and commands
-  Models/                      Observable app state and event models
-  Services/                    Keychain, preferences, tags, CSV, backend API
-  Views/                       Native tables, split views, sheets, and settings
-  Resources/Localizable.xcstrings
-script/package_app.sh          Native app bundle packager
-script/build_and_run.sh        Build, launch, debug, and verification entrypoint
-web_server.py                  Loopback JSON API only; serves no user interface
-scrape.py                      FIRST Events client using Python standard library
-calculate_opr_from_csv.py      OPR data preparation and CSV export
-opr_calc.py                    Standard-library least-squares solver
-historical_opr.py              FTCScout pre-event preview
-event_results/                 Bundled seed match data
-events_teams_opr/              Bundled seed rankings
+  App/                         SwiftUI app scenes and menu commands
+  Models/                      Event records and observable application state
+  Services/                    Backend process, API client, CSV, Keychain, tags, preferences
+  Support/                     Shared display formatting
+  Views/                       Rankings, highlights, match history, settings, and components
+  Resources/                   Localization source and packaged strings
+script/build_and_run.sh        Build, package, launch, debug, logs, and verification
+script/package_app.sh          Debug/release .app assembly and ad-hoc signing
+script/generate_app_icon.py    Standard-library app-icon generator
+web_server.py                  Loopback JSON API; no web UI or root page
+scrape.py                      FIRST Events API client and match-detail export
+calculate_opr_from_csv.py      OPR metric preparation and CSV export
+opr_calc.py                    Standard-library normal-equation solver
+historical_opr.py              FTCScout pre-event preview client
+event_results/                 Bundled seed match-detail CSVs
+events_teams_opr/              Bundled seed OPR CSVs
 ```
-
-## Data behavior
-
-For events with match data, the app displays total, non-penalty, auto, teleop-only, and endgame OPR. The native rankings table can be sorted using the controls above it. Selecting a live-event team opens a sheet containing every match, alliance result, partners, opponents, scores, tags, and a disclosure-based score breakdown.
-
-Highlights show the top final, non-penalty, auto, and teleop alliance scores, including ties. If an event is registered but has no matches, the app displays an FTCScout historical preview with team name, highest OPR, best season, recent seasonal values, and rookie year.
-
-The active season is currently `2025` in `scrape.py` and `historical_opr.py`; update those constants when the FTC season changes.
 
 ## Local API development
 
-The helper can be run directly for backend development:
+The Python helper can be run directly from the repository root:
 
 ```bash
 USERNAME=your_username TOKEN=your_token python3 web_server.py
 ```
 
-It prints its loopback address. The available endpoints are:
+It defaults to `127.0.0.1:8000` and prints the selected address. The app itself requests port `0`, allowing the operating system to select an available port.
+
+Endpoints:
 
 - `GET /api/health`
-- `POST /api/generate-opr` with `{"eventCode":"USIACMP"}`
+- `POST /api/generate-opr` with a JSON body such as `{"eventCode":"USIACMP"}`
 
-There is deliberately no root page or static-file route.
+All other routes, including `/`, return `404`. The API intentionally serves no static files.
