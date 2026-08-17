@@ -5,7 +5,14 @@ enum CSVParser {
         guard let text = String(data: data, encoding: .utf8) else {
             throw CSVParserError.invalidEncoding
         }
-        let records = parse(text)
+        // Swift treats CRLF as a single extended grapheme cluster, so a
+        // Character-by-Character parser will not match either "\r" or "\n".
+        // Normalize line endings first so CSVs written by Python's csv module
+        // split into records correctly on macOS.
+        let normalizedText = text
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+        let records = parse(normalizedText)
         guard let rawHeaders = records.first else { return [] }
         let headers = rawHeaders.map { $0.replacingOccurrences(of: "\u{feff}", with: "") }
         return records.dropFirst().compactMap { record in

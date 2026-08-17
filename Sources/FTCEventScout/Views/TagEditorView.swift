@@ -70,7 +70,7 @@ struct TagEditorView: View {
                 }
             }
             .formStyle(.grouped)
-            .navigationTitle("Tags for Team \(selection.teamNumber)")
+            .navigationTitle("Tags for Team \(selection.teamNumber.teamNumberText)")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }

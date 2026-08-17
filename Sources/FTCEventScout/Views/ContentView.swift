@@ -123,7 +123,7 @@ private struct LaunchFailureView: View {
                 .textSelection(.enabled)
         } actions: {
             HStack {
-                Button("Open Settings", action: openSettings)
+                Button("Open Settings") { openSettings() }
                 Button("Try Again", action: retry)
                     .buttonStyle(.borderedProminent)
             }

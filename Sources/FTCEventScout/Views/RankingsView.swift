@@ -117,11 +117,11 @@ private struct LiveRankingsTable: View {
             .width(min: 48, ideal: 56, max: 70)
 
             TableColumn("Team") { row in
-                Button(row.team.teamNumber.formatted()) {
+                Button(row.team.teamNumber.teamNumberText) {
                     presentedSheet = .matches(eventCode: eventCode, teamNumber: row.team.teamNumber)
                 }
                 .buttonStyle(.link)
-                .accessibilityLabel("Team \(row.team.teamNumber), show match history")
+                .accessibilityLabel("Team \(row.team.teamNumber.teamNumberText), show match history")
             }
             .width(min: 72, ideal: 84, max: 100)
 
@@ -178,7 +178,7 @@ private struct PreviewRankingsTable: View {
             .width(min: 48, ideal: 56, max: 70)
 
             TableColumn("Team") { row in
-                Text(row.team.teamNumber.formatted())
+                Text(row.team.teamNumber.teamNumberText)
                     .monospacedDigit()
             }
             .width(min: 72, ideal: 84, max: 100)

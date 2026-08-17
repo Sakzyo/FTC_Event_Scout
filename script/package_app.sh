@@ -29,12 +29,35 @@ if [[ "$CONFIGURATION" == "release" ]]; then
   SWIFT_ARGS+=(-c release)
 fi
 
-if ! swift build "${SWIFT_ARGS[@]}" >"$SWIFT_LOG" 2>&1; then
+build_swift_app() {
+  swift build "$@" "${SWIFT_ARGS[@]}" >"$SWIFT_LOG" 2>&1
+}
+
+report_swift_failure() {
   rm -rf "$APP_BUNDLE"
-  echo "The native SwiftUI app could not be compiled with the installed Apple toolchain." >&2
-  echo "Install a current Xcode release, select it with xcode-select, and run this script again." >&2
+
+  if grep -Eq \
+    'SDK is not supported by the compiler|unable to find utility "xcodebuild"|invalid active developer path|tool .xcodebuild. requires Xcode|failed to get the SDK path' \
+    "$SWIFT_LOG"; then
+    echo "The selected Apple toolchain cannot compile this macOS app." >&2
+    echo "Install a current Xcode release, select it with xcode-select, and run this script again." >&2
+  else
+    echo "The native SwiftUI app did not compile." >&2
+    grep -m 1 -E '(^|: )error:' "$SWIFT_LOG" >&2 || true
+  fi
+
   echo "Build details: $SWIFT_LOG" >&2
   exit 1
+}
+
+if ! build_swift_app; then
+  if grep -q 'sandbox-exec: sandbox_apply: Operation not permitted' "$SWIFT_LOG"; then
+    # Codex and some CI runners already execute inside a sandbox. SwiftPM's
+    # nested manifest sandbox cannot start there, so retry without nesting it.
+    build_swift_app --disable-sandbox || report_swift_failure
+  else
+    report_swift_failure
+  fi
 fi
 
 BIN_PATH="$(swift build --show-bin-path --cache-path "$BUILD_ROOT/swiftpm-cache")"

@@ -125,7 +125,7 @@ private struct HighlightEntryView: View {
             HStack(spacing: 12) {
                 ForEach(entry.teams, id: \.self) { teamNumber in
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Team \(teamNumber)")
+                        Text("Team \(teamNumber.teamNumberText)")
                             .font(.callout.weight(.medium))
                         TeamTagsSummaryView(
                             tags: model.tags(eventCode: eventCode, teamNumber: teamNumber)

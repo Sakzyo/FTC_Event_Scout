@@ -13,7 +13,7 @@ struct TeamMatchHistoryView: View {
                 teamNumber: selection.teamNumber,
                 matches: model.matches(for: selection.teamNumber)
             )
-            .navigationTitle("Team \(selection.teamNumber) Match History")
+            .navigationTitle("Team \(selection.teamNumber.teamNumberText) Match History")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
@@ -36,7 +36,7 @@ private struct MatchHistoryContent: View {
             ContentUnavailableView(
                 "No Matches Found",
                 systemImage: "rectangle.stack",
-                description: Text("No match history is available for Team \(teamNumber) at \(eventCode).")
+                description: Text("No match history is available for Team \(teamNumber.teamNumberText) at \(eventCode).")
             )
         } else {
             List {
@@ -63,7 +63,6 @@ private struct MatchCardView: View {
     let eventCode: String
     let selectedTeam: Int
     let match: MatchRecord
-    @State private var showsBreakdown = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -95,12 +94,42 @@ private struct MatchCardView: View {
                 )
             }
 
-            DisclosureGroup("Score Breakdown", isExpanded: $showsBreakdown) {
-                ScoreBreakdownGrid(match: match)
-                    .padding(.top, 8)
-            }
+            ScoreBreakdownDisclosure(match: match)
         }
         .padding(.vertical, 8)
+    }
+}
+
+private struct ScoreBreakdownDisclosure: View {
+    let match: MatchRecord
+    @State private var isExpanded = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    isExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .frame(width: 12)
+                        .accessibilityHidden(true)
+                    Text("Score Breakdown")
+                }
+                .contentShape(Rectangle())
+                .frame(maxWidth: .infinity, alignment: .center)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(isExpanded ? "Collapse Score Breakdown" : "Expand Score Breakdown")
+
+            if isExpanded {
+                ScoreBreakdownGrid(match: match)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
     }
 }
 
@@ -154,7 +183,7 @@ private struct AlliancePanelView: View {
                         Image(systemName: teamNumber == selectedTeam ? "scope" : "circle")
                             .foregroundStyle(teamNumber == selectedTeam ? .primary : .tertiary)
                             .accessibilityHidden(true)
-                        Text("Team \(teamNumber)")
+                        Text("Team \(teamNumber.teamNumberText)")
                             .fontWeight(teamNumber == selectedTeam ? .semibold : .regular)
                         TeamTagsSummaryView(
                             tags: model.tags(eventCode: eventCode, teamNumber: teamNumber)

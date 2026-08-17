@@ -2,10 +2,10 @@ import SwiftUI
 
 struct DashboardRootView: View {
     @Bindable var model: AppModel
-    @SceneStorage("selectedDashboardSection") private var selectedSectionRaw: String? = DashboardSection.rankings.rawValue
+    @SceneStorage("selectedDashboardSection") private var selectedSectionRaw = DashboardSection.rankings.rawValue
 
     private var selectedSection: DashboardSection {
-        DashboardSection(rawValue: selectedSectionRaw ?? "") ?? .rankings
+        DashboardSection(rawValue: selectedSectionRaw) ?? .rankings
     }
 
     var body: some View {
@@ -21,7 +21,7 @@ struct DashboardRootView: View {
 
 private struct DashboardSidebar: View {
     @Bindable var model: AppModel
-    @Binding var selection: String?
+    @Binding var selection: String
 
     var body: some View {
         List(selection: $selection) {
