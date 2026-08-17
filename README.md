@@ -1,6 +1,6 @@
 # FTC Event OPR Scout
 
-FTC Event OPR Scout is a local web dashboard for inspecting FIRST Tech Challenge event results and estimating each team's scoring contribution with Offensive Power Rating (OPR). Enter an FTC event code to refresh its match data from the official FIRST API, calculate several OPR variants, and explore sortable rankings, event highlights, team match histories, score breakdowns, and browser-local scouting tags.
+FTC Event OPR Scout is a native macOS app with an embedded local dashboard for inspecting FIRST Tech Challenge event results and estimating each team's scoring contribution with Offensive Power Rating (OPR). Enter an FTC event code to refresh its match data from the official FIRST API, calculate several OPR variants, and explore sortable rankings, event highlights, team match histories, score breakdowns, and Mac-local scouting tags.
 
 New to OPR? The Blue Alliance's [The Math Behind OPR — An Introduction](https://blog.thebluealliance.com/2017/10/05/the-math-behind-opr-an-introduction/) explains the core idea, assumptions, and least-squares math behind the metric.
 
@@ -13,15 +13,21 @@ If an event has registered teams but no matches yet, the dashboard falls back to
 - Calculates total, non-penalty, autonomous, teleop-only, and endgame OPR.
 - Saves both raw match details and derived team rankings as CSV files.
 - Shows event high scores, match histories, alliance score breakdowns, and sortable rankings.
-- Stores custom team tags and colors in the browser's `localStorage`.
+- Stores custom team tags and colors in the embedded WebKit view's local storage.
 - Shows a historical FTCScout preview when an event has not started.
 
 ## Project structure
 
 ```text
 FTC_Event_Scout/
+├── Package.swift                 # SwiftPM macOS executable
+├── Sources/FTCEventScout/        # SwiftUI app, WebKit bridge, settings, services
+├── Sources/AppKitFallback/       # Equivalent shell for mismatched Swift toolchains
+├── script/build_and_run.sh       # Build, package, launch, and verify entrypoint
+├── script/package_app.sh         # Creates dist/FTC Event Scout.app
+├── script/generate_app_icon.py   # Generates the macOS app icon
 ├── index.html                    # Dashboard markup and client-side behavior
-├── styles.css                   # Responsive dashboard and modal styling
+├── styles.css                   # Apple-style adaptive dashboard and modal styling
 ├── web_server.py                # Static server and POST /api/generate-opr
 ├── scrape.py                    # FIRST API client and match CSV generation
 ├── calculate_opr_from_csv.py    # CSV parsing, metric calculation, and exports
@@ -45,30 +51,56 @@ The repository currently includes paired match-detail and OPR exports for 29 eve
 - Python packages:
   - `numpy`
   - `requests`
-  - `python-dotenv`
 
-There is currently no dependency manifest, so install the packages directly:
+Install the backend packages into the Python runtime the app will use:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python3 -m pip install numpy requests python-dotenv
+python3 -m pip install -r requirements.txt
 ```
 
 ## Configuration
 
-Create or update `credentials.env` in the project root:
+On first launch, the macOS app shows a dedicated credential page when either the FIRST API username or token is missing. Enter both values and select **Save and Continue**. The app stores them in the macOS login Keychain and passes them only to its local server process. You can update them later from **FTC Event Scout > Settings** (⌘,).
+
+The app automatically finds the newest installed Python 3 interpreter each time it starts. When the same Python version is installed in more than one location, it prefers the copy that can import the required `numpy` and `requests` packages. There is no Python preference to maintain. If Python or its required packages are unavailable, the app shows a dedicated recovery page before launching the server.
+
+For the command-line web server, create or update `credentials.env` in the project root:
 
 ```dotenv
 USERNAME=your_first_api_username
 TOKEN=your_first_api_token
 ```
 
-`scrape.py` reads this file as soon as it is imported, so both values are required before `web_server.py` can start. The included `credentials.env` should be treated as a local secret: do not publish or commit it, and add it to a `.gitignore` before putting this project under version control.
+The standalone server reads credentials when an event refresh is requested. `credentials.env` is ignored by Git and should never be published or copied into the app bundle.
 
 The active FTC season is currently hard-coded as `2025` in `scrape.py`. The FTCScout event lookup also defaults to 2025 in `historical_opr.py`. Update both constants when moving the application to another season; also review `HISTORICAL_SEASONS` in `historical_opr.py`.
 
-## Run the dashboard
+## Build and run the macOS app
+
+Use the project entrypoint (also exposed as the Codex **Run** action):
+
+```bash
+./script/build_and_run.sh
+```
+
+This creates and launches `dist/FTC Event Scout.app`. Optional modes are:
+
+```bash
+./script/build_and_run.sh --verify
+./script/build_and_run.sh --debug
+./script/build_and_run.sh --logs
+./script/build_and_run.sh --telemetry
+```
+
+To package without launching, run `./script/package_app.sh debug` or `./script/package_app.sh release`. The bundle is ad-hoc signed for local use. Distribution through Gatekeeper or the Mac App Store still requires an Apple Developer identity, hardened-runtime signing, and notarization.
+
+The packager prefers the SwiftUI executable. If the installed Command Line Tools contain an incompatible Swift compiler/SDK/SwiftPM combination, it automatically builds the equivalent AppKit shell so a usable app is still produced; details are written to `.build/swift-build.log`.
+
+Generated CSV files are stored in `~/Library/Application Support/FTC Event Scout/`. Seed CSVs are copied there on first launch, while the source copies remain unchanged.
+
+## Run the standalone dashboard
 
 Start the server from the project root so its relative data paths resolve correctly:
 
@@ -203,7 +235,7 @@ The POST request refreshes and overwrites that event's generated CSV files. A su
 - Selecting column headers sorts the table; when sorting away from the stored rank, the UI inserts a dynamic ranking column.
 - Selecting a team number opens all of that team's matches with alliance, opponent, result, and expandable score details.
 - Event highlight cards show the highest final, non-penalty, auto, and teleop alliance scores, including ties.
-- Tags are scoped to an event/team pair and remain only in that browser's `localStorage`; they are not written to disk or shared between users.
+- Tags are scoped to an event/team pair and remain in the app's local WebKit storage; they are not written to CSV or shared between users.
 - The local server sends no-cache headers so regenerated CSVs appear immediately.
 
 ## Development notes and limitations
@@ -214,12 +246,17 @@ The POST request refreshes and overwrites that event's generated CSV files. A su
 - The browser CSV parser is intentionally simple and splits on commas; the generated files currently contain numeric fields without quoted commas.
 - `event.py` is not imported by the active pipeline.
 - `index.html` contains unused client-side OPR/export helpers; the active path uses the Python calculation and generated server-side CSV.
-- Existing CSVs can be recalculated offline, but starting the web server still requires FIRST credentials because `scrape.py` validates them during import.
+- Existing CSVs can be recalculated offline. The standalone server can start without FIRST credentials, while the macOS app requires credentials before it starts its embedded server.
 
 ## Troubleshooting
 
-**`USERNAME and TOKEN must be set in credentials.env.`**  
-Confirm that `credentials.env` is in the project root and contains both variable names with no extra quoting required.
+**FIRST API credentials are missing.**
+
+In the macOS app, enter both values on the startup credential page, or update them later in Settings (⌘,). For the standalone server, confirm that `credentials.env` is in the project root and contains both variable names.
+
+**The local server cannot start.**
+
+Install Python 3 from the official Python for macOS download page if the app shows **Python 3 Required**. The app selects the newest Python 3 it finds automatically and preflights `numpy` and `requests`. If all copies of that version are missing a package, the app shows the exact interpreter-specific installation command before launching the server.
 
 **The page loads, but event generation fails.**  
 Check the event code, the configured season, your FIRST API credentials, and network access. The error returned by the upstream API is displayed in the dashboard status area.

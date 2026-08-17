@@ -17,6 +17,8 @@ env/
 coverage.xml
 .coverage
 htmlcov/
+.build/
+dist/
 
 # Editors and operating systems
 .vscode/

@@ -4,26 +4,41 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>FTC Event OPR Scout</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <main class="page">
     <section class="card">
-      <div class="header">
-        <h1>FTC Event OPR Scout</h1>
-        <div class="subtitle">Enter an event code to load OPR metrics. If missing, the server will generate and save the OPR CSV automatically.</div>
-      </div>
+      <header class="header">
+        <div class="eyebrow">FIRST Tech Challenge</div>
+        <h1>Event Scout</h1>
+        <p class="subtitle">Compare team contribution estimates, inspect match history, and keep local scouting tags.</p>
+      </header>
 
-      <form id="event-form" class="controls">
-        <input id="event-code" name="event" placeholder="Example: USIACMP" required />
-        <button type="submit">Load Event</button>
+      <form id="event-form" class="controls" aria-label="Load an FTC event">
+        <label class="event-field" for="event-code">
+          <span class="control-label">Event code</span>
+          <input
+            id="event-code"
+            name="event"
+            placeholder="USIACMP"
+            autocomplete="off"
+            autocapitalize="characters"
+            spellcheck="false"
+            aria-describedby="event-code-hint"
+            required
+          />
+        </label>
+        <button id="load-event-button" type="submit">Load Event</button>
+        <span id="event-code-hint" class="control-hint">Use the official event code. Press ⌘L to return here.</span>
       </form>
 
-      <div id="status" class="status">Waiting for event code...</div>
+      <div id="status" class="status" role="status" aria-live="polite">Ready for an event code.</div>
 
       <div class="content-layout">
         <section class="opr-window">
-          <div class="opr-window-title">Team OPR Table</div>
+          <h2 class="opr-window-title">Team rankings</h2>
           <div class="table-wrap">
             <table id="opr-table" aria-live="polite">
               <thead></thead>
@@ -34,6 +49,7 @@
 
         <aside class="event-summary" aria-live="polite">
           <h2>Event Highlights</h2>
+          <p class="summary-intro">Best alliance scores from the loaded event.</p>
           <div class="highlight-cards">
             <section class="highlight-card">
               <div class="summary-label">Event High Score</div>
@@ -104,13 +120,14 @@
         </div>
       </div>
 
-      <div class="footer">Source files: events_teams_opr/&lt;EVENT_CODE&gt; OPR.csv, generated from event_results/&lt;EVENT_CODE&gt; Match Details.csv by POST /api/generate-opr</div>
+      <footer class="footer">OPR is an estimate based on alliance results, not a direct measurement of one robot. Data and tags remain on this Mac.</footer>
     </section>
   </main>
 
   <script>
     const form = document.getElementById("event-form");
     const input = document.getElementById("event-code");
+    const loadButton = document.getElementById("load-event-button");
     const statusEl = document.getElementById("status");
     const table = document.getElementById("opr-table");
     const thead = table.querySelector("thead");
@@ -147,6 +164,7 @@
     let currentSort = { columnIndex: 0, direction: "asc" };
     let currentEventCode = "";
     let currentEventMatchRows = [];
+    let lastFocusedElement = null;
 
     function getTeamTags(eventCode, teamNumber) {
       const key = `tags_${eventCode}_${teamNumber}`;
@@ -181,6 +199,7 @@
     }
 
     function promptAddTag(teamNumber) {
+      const triggerElement = document.activeElement;
       const tagColors = [
         { name: "Blue", bg: "#dbeafe", text: "#1e3a6e" },
         { name: "Green", bg: "#d1fae5", text: "#065f46" },
@@ -273,6 +292,9 @@
         tagCancelBtn.replaceWith(tagCancelBtn.cloneNode(true));
         tagCloseBtn.replaceWith(tagCloseBtn.cloneNode(true));
         tagModal.replaceWith(tagModal.cloneNode(true));
+        if (triggerElement && typeof triggerElement.focus === "function") {
+          triggerElement.focus();
+        }
       }
 
       function save() {
@@ -587,14 +609,34 @@
     }
 
     function openModal(title, htmlContent) {
+      lastFocusedElement = document.activeElement;
       modalTitle.textContent = title;
       modalBody.innerHTML = htmlContent;
+      modalBody.querySelectorAll(".breakdown-toggle").forEach((toggle) => {
+        toggle.addEventListener("click", () => {
+          const row = toggle.closest(".row-expandable");
+          if (!row) return;
+          const expanded = !row.classList.contains("expanded");
+          row.classList.toggle("expanded", expanded);
+          toggle.setAttribute("aria-expanded", String(expanded));
+          let sibling = row.nextElementSibling;
+          while (sibling && sibling.classList.contains("row-detail")) {
+            sibling.classList.toggle("visible", expanded);
+            sibling = sibling.nextElementSibling;
+          }
+        });
+      });
       modal.classList.remove("hidden");
+      modalCloseButton.focus();
     }
 
     function closeModal() {
       modal.classList.add("hidden");
       modalBody.innerHTML = "";
+      if (lastFocusedElement && typeof lastFocusedElement.focus === "function") {
+        lastFocusedElement.focus();
+      }
+      lastFocusedElement = null;
     }
 
     async function ensureMatchRowsLoaded() {
@@ -767,8 +809,8 @@
           }
           if (field.details) {
             return `
-              <tr class="breakdown-row ${rowClass} row-expandable" onclick="this.classList.toggle('expanded');let s=this;while((s=s.nextElementSibling)&&s.classList.contains('row-detail'))s.classList.toggle('visible')">
-                <td class="breakdown-category"><span class="expand-chevron">›</span>${escapeHtml(field.label)}</td>
+              <tr class="breakdown-row ${rowClass} row-expandable">
+                <td class="breakdown-category"><button class="breakdown-toggle" type="button" aria-expanded="false"><span class="expand-chevron" aria-hidden="true">›</span>${escapeHtml(field.label)}</button></td>
                 <td class="breakdown-red-cell">${escapeHtml(redVal ?? "-")}</td>
                 <td class="breakdown-blue-cell">${escapeHtml(blueVal ?? "-")}</td>
               </tr>
@@ -1218,6 +1260,13 @@
         th.textContent = header;
         th.classList.add("sortable");
         th.tabIndex = 0;
+        th.setAttribute("role", "columnheader");
+        th.setAttribute(
+          "aria-sort",
+          columnIndex === currentSort.columnIndex
+            ? (currentSort.direction === "asc" ? "ascending" : "descending")
+            : "none"
+        );
         updateSortIndicator(
           th,
           columnIndex === currentSort.columnIndex,
@@ -1359,6 +1408,9 @@
 
       setStatus(`Refreshing ${safeEvent} data and regenerating CSV files...`);
       setSummaryLoading();
+      loadButton.disabled = true;
+      loadButton.textContent = "Loading…";
+      form.setAttribute("aria-busy", "true");
       try {
         currentEventCode = safeEvent;
         currentEventMatchRows = [];
@@ -1423,7 +1475,15 @@
       } catch (error) {
         thead.innerHTML = "";
         tbody.innerHTML = "";
+        setMetricSummary("final", "-", "Event highlights are unavailable.");
+        setMetricSummary("nonPenalty", "-", "Event highlights are unavailable.");
+        setMetricSummary("auto", "-", "Event highlights are unavailable.");
+        setMetricSummary("teleop", "-", "Event highlights are unavailable.");
         setStatus(error.message, "error");
+      } finally {
+        loadButton.disabled = false;
+        loadButton.textContent = "Load Event";
+        form.removeAttribute("aria-busy");
       }
     }
 
@@ -1439,8 +1499,13 @@
       }
     });
     document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" && !modal.classList.contains("hidden")) {
-        closeModal();
+      if (event.key === "Escape") {
+        const tagModal = document.getElementById("tag-modal");
+        if (tagModal && !tagModal.classList.contains("hidden")) {
+          document.getElementById("tag-modal-cancel")?.click();
+        } else if (!modal.classList.contains("hidden")) {
+          closeModal();
+        }
       }
     });
   </script>

@@ -1,30 +1,55 @@
 import base64
 import csv
 import os
+from pathlib import Path
 
 import requests
-from dotenv import load_dotenv
 
 BASE_URL = "https://ftc-api.firstinspires.org"
 SEASON = "2025"
 OUTPUT_DIR = "event_results"
-
-load_dotenv("credentials.env")
-username = os.getenv("USERNAME")
-token = os.getenv("TOKEN")
-
-if not username or not token:
-    raise RuntimeError("USERNAME and TOKEN must be set in credentials.env.")
-
-encoded = base64.b64encode(f"{username}:{token}".encode()).decode()
-HEADERS = {"Authorization": f"Basic {encoded}"}
 TOURNAMENT_LEVELS = ("qual", "playoff")
+
+
+def _credentials_from_file(path):
+    """Read the two supported dotenv keys without requiring python-dotenv."""
+    values = {}
+    credentials_path = Path(path).expanduser()
+    if not credentials_path.is_file():
+        return values
+
+    for raw_line in credentials_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        values[key.strip()] = value
+    return values
+
+
+def _authorization_headers():
+    credentials_path = os.getenv("FTC_SCOUT_CREDENTIALS_FILE", "credentials.env")
+    file_values = _credentials_from_file(credentials_path)
+    username = os.getenv("USERNAME") or file_values.get("USERNAME")
+    token = os.getenv("TOKEN") or file_values.get("TOKEN")
+
+    if not username or not token:
+        raise RuntimeError(
+            "FIRST API credentials are missing. Open FTC Event Scout Settings and "
+            "enter your FIRST API username and token."
+        )
+
+    encoded = base64.b64encode(f"{username}:{token}".encode()).decode()
+    return {"Authorization": f"Basic {encoded}"}
 
 
 def make_request(path, params=None):
     response = requests.get(
         f"{BASE_URL}/v2.0/{SEASON}/{path}",
-        headers=HEADERS,
+        headers=_authorization_headers(),
         params=params,
         timeout=30,
     )

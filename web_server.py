@@ -1,11 +1,21 @@
+import argparse
+from functools import partial
 import json
+import os
+from pathlib import Path
+import re
+import shutil
 import socket
 import sys
-from http.server import HTTPServer, SimpleHTTPRequestHandler
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 from calculate_opr_from_csv import generate_event_opr_csv
 from historical_opr import fetch_event_preview
 from scrape import generate_event_match_details_csv
+
+
+RESOURCE_ROOT = Path(__file__).resolve().parent
+EVENT_CODE_PATTERN = re.compile(r"^[A-Z0-9]{2,24}$")
 
 
 def _looks_like_no_matches_error(exc):
@@ -32,6 +42,12 @@ class OPRWebHandler(SimpleHTTPRequestHandler):
 
             if not event_code:
                 self._send_json(400, {"error": "eventCode is required."})
+                return
+            if not EVENT_CODE_PATTERN.fullmatch(event_code):
+                self._send_json(
+                    400,
+                    {"error": "Event codes may contain only 2–24 letters and numbers."},
+                )
                 return
 
             try:
@@ -121,14 +137,38 @@ class OPRWebHandler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
 
-def parse_port(argv):
-    if len(argv) < 2:
-        return 8000
+def parse_args(argv):
+    parser = argparse.ArgumentParser(description="Run the FTC Event Scout local server.")
+    parser.add_argument("port", nargs="?", type=int, default=8000)
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--data-dir", type=Path, default=Path.cwd())
+    parser.add_argument("--resource-dir", type=Path, default=RESOURCE_ROOT)
+    return parser.parse_args(argv[1:])
 
-    try:
-        return int(argv[1])
-    except ValueError as exc:
-        raise ValueError(f"Invalid port '{argv[1]}'. Use an integer like 8000.") from exc
+
+def prepare_data_directory(resource_dir, data_dir):
+    """Stage mutable web assets and seed CSVs outside the read-only app bundle."""
+    resource_dir = resource_dir.expanduser().resolve()
+    data_dir = data_dir.expanduser().resolve()
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    for filename in ("index.html", "styles.css", "favicon.svg"):
+        source = resource_dir / filename
+        if source.is_file() and source.resolve() != (data_dir / filename).resolve():
+            shutil.copy2(source, data_dir / filename)
+
+    for directory_name in ("event_results", "events_teams_opr"):
+        source_dir = resource_dir / directory_name
+        destination_dir = data_dir / directory_name
+        destination_dir.mkdir(parents=True, exist_ok=True)
+        if not source_dir.is_dir() or source_dir.resolve() == destination_dir.resolve():
+            continue
+        for source in source_dir.glob("*.csv"):
+            destination = destination_dir / source.name
+            if not destination.exists():
+                shutil.copy2(source, destination)
+
+    return data_dir
 
 
 def first_available_port(start_port, max_tries=20):
@@ -141,22 +181,33 @@ def first_available_port(start_port, max_tries=20):
     return None
 
 
-if __name__ == "__main__":
-    try:
-        requested_port = parse_port(sys.argv)
-    except ValueError as err:
-        print(err)
-        sys.exit(1)
+def main(argv=None):
+    args = parse_args(argv or sys.argv)
+    data_dir = prepare_data_directory(args.resource_dir, args.data_dir)
+    os.chdir(data_dir)
 
-    selected_port = first_available_port(requested_port)
+    selected_port = first_available_port(args.port)
     if selected_port is None:
-        print(f"Could not find an available port starting at {requested_port}.")
-        sys.exit(1)
+        print(f"Could not find an available port starting at {args.port}.", flush=True)
+        return 1
 
-    if selected_port != requested_port:
-        print(f"Port {requested_port} is in use. Falling back to {selected_port}.")
+    if selected_port != args.port:
+        print(f"Port {args.port} is in use. Falling back to {selected_port}.", flush=True)
 
-    server = HTTPServer(("127.0.0.1", selected_port), OPRWebHandler)
-    print(f"Serving on http://127.0.0.1:{selected_port}")
-    print("API endpoint: POST /api/generate-opr")
-    server.serve_forever()
+    handler = partial(OPRWebHandler, directory=str(data_dir))
+    server = ThreadingHTTPServer((args.host, selected_port), handler)
+    actual_port = server.server_address[1]
+    url = f"http://{args.host}:{actual_port}"
+    print(f"READY {url}", flush=True)
+    print("API endpoint: POST /api/generate-opr", flush=True)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
