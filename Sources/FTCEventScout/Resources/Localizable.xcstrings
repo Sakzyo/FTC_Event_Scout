@@ -1,0 +1,61 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Event Could Not Be Loaded" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Event Could Not Be Loaded" } }
+      }
+    },
+    "FIRST Events API" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "FIRST Events API" } }
+      }
+    },
+    "FTC Event Scout" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "FTC Event Scout" } }
+      }
+    },
+    "General" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "General" } }
+      }
+    },
+    "Highlights" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Highlights" } }
+      }
+    },
+    "Load Event…" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Load Event…" } }
+      }
+    },
+    "Python 3 Required" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Python 3 Required" } }
+      }
+    },
+    "Rankings" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Rankings" } }
+      }
+    },
+    "Refresh Event" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Refresh Event" } }
+      }
+    },
+    "Save and Continue" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save and Continue" } }
+      }
+    },
+    "Settings" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Settings" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}

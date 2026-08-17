@@ -21,7 +21,7 @@ struct CredentialSetupView: View {
                 Text("Connect to FIRST Events")
                     .font(.largeTitle.weight(.semibold))
 
-                Text("Enter your FIRST Events API credentials to start the scouting dashboard.")
+                Text("Enter your FIRST Events API credentials to load FTC event data.")
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
@@ -50,7 +50,7 @@ struct CredentialSetupView: View {
             }
             .frame(width: 480)
 
-            Text("Your credentials are stored in your macOS login Keychain and passed only to the local server.")
+            Text("Your credentials are stored in your macOS login Keychain and passed only to the local data service.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

@@ -29,32 +29,19 @@ if [[ "$CONFIGURATION" == "release" ]]; then
   SWIFT_ARGS+=(-c release)
 fi
 
-if swift build "${SWIFT_ARGS[@]}" >"$SWIFT_LOG" 2>&1; then
-  BIN_PATH="$(swift build --show-bin-path --cache-path "$BUILD_ROOT/swiftpm-cache")"
-  if [[ "$CONFIGURATION" == "release" ]]; then
-    BIN_PATH="$(swift build --show-bin-path --cache-path "$BUILD_ROOT/swiftpm-cache" -c release)"
-  fi
-  BUILD_BINARY="$BIN_PATH/$EXECUTABLE_NAME"
-  BUILD_IMPLEMENTATION="SwiftUI"
-else
-  echo "SwiftPM could not use the installed Command Line Tools; building the equivalent AppKit shell."
-  echo "SwiftPM details: $SWIFT_LOG"
-  FALLBACK_DIR="$BUILD_ROOT/appkit-$CONFIGURATION"
-  mkdir -p "$FALLBACK_DIR" "$BUILD_ROOT/clang-module-cache-objc"
-  CLANG_OPT=(-O0 -g)
-  if [[ "$CONFIGURATION" == "release" ]]; then
-    CLANG_OPT=(-O2)
-  fi
-  clang -fobjc-arc -fmodules \
-    -fmodules-cache-path="$BUILD_ROOT/clang-module-cache-objc" \
-    -mmacosx-version-min=14.0 "${CLANG_OPT[@]}" \
-    "$ROOT_DIR/Sources/AppKitFallback/main.m" \
-    "$ROOT_DIR/Sources/AppKitFallback/FTCSettingsWindowController.m" \
-    -o "$FALLBACK_DIR/$EXECUTABLE_NAME" \
-    -framework Cocoa -framework WebKit -framework Security
-  BUILD_BINARY="$FALLBACK_DIR/$EXECUTABLE_NAME"
-  BUILD_IMPLEMENTATION="AppKit compatibility shell"
+if ! swift build "${SWIFT_ARGS[@]}" >"$SWIFT_LOG" 2>&1; then
+  rm -rf "$APP_BUNDLE"
+  echo "The native SwiftUI app could not be compiled with the installed Apple toolchain." >&2
+  echo "Install a current Xcode release, select it with xcode-select, and run this script again." >&2
+  echo "Build details: $SWIFT_LOG" >&2
+  exit 1
 fi
+
+BIN_PATH="$(swift build --show-bin-path --cache-path "$BUILD_ROOT/swiftpm-cache")"
+if [[ "$CONFIGURATION" == "release" ]]; then
+  BIN_PATH="$(swift build --show-bin-path --cache-path "$BUILD_ROOT/swiftpm-cache" -c release)"
+fi
+BUILD_BINARY="$BIN_PATH/$EXECUTABLE_NAME"
 
 rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_MACOS" "$APP_RESOURCES" "$BACKEND_RESOURCES"
@@ -62,12 +49,22 @@ cp "$BUILD_BINARY" "$APP_MACOS/$EXECUTABLE_NAME"
 chmod +x "$APP_MACOS/$EXECUTABLE_NAME"
 
 for file in \
-  index.html styles.css favicon.svg web_server.py scrape.py \
-  calculate_opr_from_csv.py historical_opr.py opr_calc.py event.py; do
+  web_server.py scrape.py calculate_opr_from_csv.py \
+  historical_opr.py opr_calc.py; do
   cp "$ROOT_DIR/$file" "$BACKEND_RESOURCES/$file"
 done
 cp -R "$ROOT_DIR/event_results" "$BACKEND_RESOURCES/event_results"
 cp -R "$ROOT_DIR/events_teams_opr" "$BACKEND_RESOURCES/events_teams_opr"
+cp -R "$ROOT_DIR/Sources/FTCEventScout/Resources/en.lproj" "$APP_RESOURCES/en.lproj"
+
+while IFS= read -r resource_bundle; do
+  cp -R "$resource_bundle" "$APP_RESOURCES/"
+  while IFS= read -r localization_directory; do
+    localization_name="$(basename "$localization_directory")"
+    mkdir -p "$APP_RESOURCES/$localization_name"
+    cp -R "$localization_directory/." "$APP_RESOURCES/$localization_name/"
+  done < <(find "$resource_bundle" -maxdepth 1 -type d -name '*.lproj' -print)
+done < <(find "$BIN_PATH" -maxdepth 1 -type d -name '*.bundle' -print)
 
 ICONSET="$BUILD_ROOT/FTCEventScout.iconset"
 rm -rf "$ICONSET"
@@ -113,5 +110,5 @@ cat >"$APP_CONTENTS/Info.plist" <<PLIST
 </plist>
 PLIST
 
-codesign --force --deep --sign - "$APP_BUNDLE" >/dev/null
-echo "Packaged $APP_BUNDLE ($BUILD_IMPLEMENTATION, $CONFIGURATION)"
+codesign --force --sign - "$APP_BUNDLE" >/dev/null
+echo "Packaged $APP_BUNDLE (native SwiftUI, $CONFIGURATION)"

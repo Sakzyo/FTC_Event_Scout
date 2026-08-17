@@ -1,8 +1,7 @@
 import csv
 import glob
+import math
 import os
-
-import numpy as np
 
 from opr_calc import opr_calc
 
@@ -124,14 +123,17 @@ def build_matrices(equations):
     team_numbers = sorted({team for eq in equations for team in eq["teams"]})
     team_index = {team: idx for idx, team in enumerate(team_numbers)}
 
-    matrix_m = np.zeros((len(equations), len(team_numbers)), dtype=float)
-    vector_s = np.zeros(len(equations), dtype=float)
+    matrix_m = [
+        [0.0 for _ in range(len(team_numbers))]
+        for _ in range(len(equations))
+    ]
+    vector_s = [0.0 for _ in range(len(equations))]
 
     for row_idx, equation in enumerate(equations):
         teams = equation["teams"]
         score = equation["score"]
         for team in teams:
-            matrix_m[row_idx, team_index[team]] = 1.0
+            matrix_m[row_idx][team_index[team]] = 1.0
         vector_s[row_idx] = score
 
     return team_numbers, matrix_m, vector_s
@@ -160,14 +162,14 @@ def calculate_event_opr(csv_path):
     for metric_key in METRIC_ORDER:
         metric_equations = equations_for_metric(equations, metric_key)
         if not metric_equations:
-            metric_vectors[metric_key] = np.full(len(team_numbers), np.nan)
+            metric_vectors[metric_key] = [math.nan for _ in team_numbers]
             continue
 
         metric_teams, metric_m, metric_s = build_matrices(metric_equations)
         metric_team_index = {team: idx for idx, team in enumerate(metric_teams)}
         metric_opr = opr_calc(metric_m, metric_s)
 
-        aligned_metric_opr = np.full(len(team_numbers), np.nan)
+        aligned_metric_opr = [math.nan for _ in team_numbers]
         for idx, team in enumerate(team_numbers):
             metric_idx = metric_team_index.get(team)
             if metric_idx is not None:

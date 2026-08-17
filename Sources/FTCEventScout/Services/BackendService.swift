@@ -1,10 +1,16 @@
 import AppKit
 import Foundation
 
+struct BackendContext: Equatable {
+    let baseURL: URL
+    let dataDirectory: URL
+}
+
 final class BackendService {
     private var process: Process?
     private var stdoutPipe: Pipe?
     private var stderrPipe: Pipe?
+    private var completionGate: CompletionGate?
     private var terminationObserver: NSObjectProtocol?
 
     init() {
@@ -27,13 +33,13 @@ final class BackendService {
     func start(
         username: String,
         token: String,
-        completion: @escaping (Result<URL, Error>) -> Void
+        completion: @escaping (Result<BackendContext, Error>) -> Void
     ) {
         stop()
 
         do {
             let resourceDirectory = try backendResourceDirectory()
-            let dataDirectory = try applicationDataDirectory()
+            let dataDirectory = try ApplicationDirectories.cacheDirectory()
             let pythonURL = try resolveLatestPython()
             let scriptURL = resourceDirectory.appendingPathComponent("web_server.py")
             guard FileManager.default.fileExists(atPath: scriptURL.path) else {
@@ -81,7 +87,10 @@ final class BackendService {
                 for line in output.append(data) where line.hasPrefix("READY ") {
                     let rawURL = String(line.dropFirst("READY ".count))
                     if let url = URL(string: rawURL) {
-                        gate.finish(.success(url))
+                        gate.finish(.success(BackendContext(
+                            baseURL: url,
+                            dataDirectory: dataDirectory
+                        )))
                     }
                 }
             }
@@ -95,15 +104,21 @@ final class BackendService {
 
             process.terminationHandler = { process in
                 let detail = errors.text.trimmingCharacters(in: .whitespacesAndNewlines)
-                let message = detail.isEmpty
-                    ? "The local server exited with status \(process.terminationStatus)."
-                    : detail
+                let message: String
+                if !detail.isEmpty {
+                    message = detail
+                } else if process.terminationStatus == 15 {
+                    message = "The local data service was terminated before startup completed."
+                } else {
+                    message = "The local data service exited with status \(process.terminationStatus)."
+                }
                 gate.finish(.failure(BackendServiceError.launchFailed(message)))
             }
 
             self.process = process
             self.stdoutPipe = stdoutPipe
             self.stderrPipe = stderrPipe
+            self.completionGate = gate
             try process.run()
 
             DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 15) { [weak process] in
@@ -113,11 +128,14 @@ final class BackendService {
                 }
             }
         } catch {
+            stop()
             completion(.failure(error))
         }
     }
 
     func stop() {
+        completionGate?.cancel()
+        completionGate = nil
         stdoutPipe?.fileHandleForReading.readabilityHandler = nil
         stderrPipe?.fileHandleForReading.readabilityHandler = nil
         if let process, process.isRunning {
@@ -146,21 +164,6 @@ final class BackendService {
         return sourceRoot
     }
 
-    private func applicationDataDirectory() throws -> URL {
-        guard let base = FileManager.default.urls(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask
-        ).first else {
-            throw BackendServiceError.applicationSupportUnavailable
-        }
-        let directory = base.appendingPathComponent("FTC Event Scout", isDirectory: true)
-        try FileManager.default.createDirectory(
-            at: directory,
-            withIntermediateDirectories: true
-        )
-        return directory
-    }
-
     private func resolveLatestPython() throws -> URL {
         let installed = pythonCandidates().compactMap { url -> PythonRuntime? in
             guard FileManager.default.isExecutableFile(atPath: url.path),
@@ -175,25 +178,10 @@ final class BackendService {
             throw BackendServiceError.pythonNotFound
         }
 
-        let latestRuntimes = installed.filter { $0.version == latestVersion }
-        var firstIncompleteRuntime: (PythonRuntime, [String])?
-        for runtime in latestRuntimes {
-            let missing = missingPackages(at: runtime.url)
-            if missing.isEmpty {
-                return runtime.url
-            }
-            if firstIncompleteRuntime == nil {
-                firstIncompleteRuntime = (runtime, missing)
-            }
-        }
-
-        guard let incomplete = firstIncompleteRuntime else {
-            throw BackendServiceError.pythonNotFound
-        }
-        throw BackendServiceError.missingPythonPackages(
-            pythonPath: incomplete.0.url.path,
-            packages: incomplete.1
-        )
+        return installed
+            .filter { $0.version == latestVersion }
+            .sorted { $0.url.path < $1.url.path }
+            .first?.url ?? installed[0].url
     }
 
     private func pythonCandidates() -> [URL] {
@@ -300,45 +288,6 @@ final class BackendService {
         }
     }
 
-    private func missingPackages(at url: URL) -> [String] {
-        let requiredPackages = ["numpy", "requests"]
-        let packageList = requiredPackages
-            .map { "\"\($0)\"" }
-            .joined(separator: ", ")
-        let script = """
-        import importlib
-        missing = []
-        for package in (\(packageList),):
-            try:
-                importlib.import_module(package)
-            except Exception:
-                missing.append(package)
-        print(",".join(missing))
-        """
-
-        let process = Process()
-        let output = Pipe()
-        process.executableURL = url
-        process.arguments = ["-B", "-c", script]
-        process.standardOutput = output
-        process.standardError = FileHandle.nullDevice
-        var environment = ProcessInfo.processInfo.environment
-        environment["PYTHONDONTWRITEBYTECODE"] = "1"
-        process.environment = environment
-
-        do {
-            try process.run()
-            process.waitUntilExit()
-            guard process.terminationStatus == 0 else { return requiredPackages }
-            let data = output.fileHandleForReading.readDataToEndOfFile()
-            let text = String(data: data, encoding: .utf8) ?? ""
-            return text.trimmingCharacters(in: .whitespacesAndNewlines)
-                .split(separator: ",")
-                .map(String.init)
-        } catch {
-            return requiredPackages
-        }
-    }
 }
 
 private struct PythonRuntime {
@@ -375,14 +324,14 @@ private struct PythonVersion: Comparable {
 private final class CompletionGate: @unchecked Sendable {
     private let lock = NSLock()
     private var completed = false
-    private let completion: (Result<URL, Error>) -> Void
+    private let completion: (Result<BackendContext, Error>) -> Void
 
-    init(completion: @escaping (Result<URL, Error>) -> Void) {
+    init(completion: @escaping (Result<BackendContext, Error>) -> Void) {
         self.completion = completion
     }
 
     @discardableResult
-    func finish(_ result: Result<URL, Error>) -> Bool {
+    func finish(_ result: Result<BackendContext, Error>) -> Bool {
         lock.lock()
         guard !completed else {
             lock.unlock()
@@ -394,6 +343,12 @@ private final class CompletionGate: @unchecked Sendable {
             self.completion(result)
         }
         return true
+    }
+
+    func cancel() {
+        lock.lock()
+        completed = true
+        lock.unlock()
     }
 }
 
@@ -432,26 +387,20 @@ private final class TextAccumulator: @unchecked Sendable {
 
 enum BackendServiceError: LocalizedError {
     case missingResources
-    case applicationSupportUnavailable
     case pythonNotFound
-    case missingPythonPackages(pythonPath: String, packages: [String])
     case launchFailed(String)
     case startupTimedOut
 
     var errorDescription: String? {
         switch self {
         case .missingResources:
-            "The app’s bundled dashboard resources are missing. Rebuild the app bundle."
-        case .applicationSupportUnavailable:
-            "FTC Event Scout could not open its Application Support folder."
+            "The app’s bundled data-service resources are missing. Rebuild the app bundle."
         case .pythonNotFound:
             "Python 3 was not found. Install the latest Python 3 for macOS, then try again."
-        case .missingPythonPackages(let pythonPath, let packages):
-            "The newest Python 3 installation is missing \(packages.joined(separator: ", ")). Install them with \"\(pythonPath)\" -m pip install \(packages.joined(separator: " ")), then try again."
         case .launchFailed(let detail):
-            "The local server could not start. \(detail)"
+            "The local data service could not start. \(detail)"
         case .startupTimedOut:
-            "The local server did not become ready within 15 seconds."
+            "The local data service did not become ready within 15 seconds."
         }
     }
 }

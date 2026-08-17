@@ -4,48 +4,44 @@ struct ContentView: View {
     @Bindable var model: AppModel
 
     var body: some View {
-        Group {
-            switch model.launchState {
-            case .idle, .starting:
-                LaunchingView()
-            case .credentialsRequired:
-                CredentialSetupView(model: model)
-            case .ready(let url):
-                WebDashboardView(
-                    url: url,
-                    reloadToken: model.reloadToken,
-                    eventCode: model.eventCode,
-                    eventLoadToken: model.eventLoadToken
-                )
-            case .pythonRequired:
-                PythonRequiredView(retry: model.restartBackend)
-            case .pythonPackagesRequired(let message):
-                PythonPackagesRequiredView(message: message, retry: model.restartBackend)
-            case .failed(let message):
-                LaunchFailureView(message: message, retry: model.restartBackend)
+        content
+            .frame(minWidth: 820, minHeight: 560)
+            .task {
+                model.startIfNeeded()
             }
-        }
-        .frame(minWidth: 820, minHeight: 560)
-        .task {
-            model.startIfNeeded()
-        }
-        .toolbar {
-            ToolbarItem(placement: .automatic) {
-                EventCodeToolbar(model: model)
-            }
-
-            ToolbarItemGroup(placement: .primaryAction) {
-                Button(action: model.reloadDashboard) {
-                    Label("Reload", systemImage: "arrow.clockwise")
+            .toolbar {
+                ToolbarItem(placement: .automatic) {
+                    EventCodeToolbar(model: model)
                 }
-                .disabled(!model.isReady)
-                .help("Reload Dashboard (⌘R)")
 
-                SettingsLink {
-                    Label("Settings", systemImage: "gearshape")
+                ToolbarItemGroup(placement: .primaryAction) {
+                    Button(action: model.refreshEvent) {
+                        Label("Refresh Event", systemImage: "arrow.clockwise")
+                    }
+                    .disabled(!model.isReady || model.eventCode.isEmpty)
+                    .help("Refresh Event (⌘R)")
+
+                    SettingsLink {
+                        Label("Settings", systemImage: "gearshape")
+                    }
+                    .help("Settings (⌘,)")
                 }
-                .help("Settings (⌘,)")
             }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch model.launchState {
+        case .idle, .starting:
+            LaunchingView()
+        case .credentialsRequired:
+            CredentialSetupView(model: model)
+        case .ready:
+            DashboardRootView(model: model)
+        case .pythonRequired:
+            PythonRequiredView(retry: model.restartBackend)
+        case .failed(let message):
+            LaunchFailureView(message: message, retry: model.restartBackend)
         }
     }
 }
@@ -55,34 +51,24 @@ private struct EventCodeToolbar: View {
     @FocusState private var isFocused: Bool
 
     var body: some View {
-        TextField("Event code", text: $model.eventCode)
-            .frame(width: 190)
-            .focused($isFocused)
-            .onSubmit(model.loadEvent)
-            .onChange(of: model.focusToken) {
-                isFocused = model.isReady
+        HStack(spacing: 6) {
+            TextField("Event code", text: $model.eventCode)
+                .frame(width: 160)
+                .focused($isFocused)
+                .onSubmit(model.loadEvent)
+                .disabled(!model.isReady)
+                .accessibilityLabel("FTC event code")
+                .accessibilityHint("Enter an event code and press Return")
+
+            Button(action: model.loadEvent) {
+                Label("Load", systemImage: "arrow.right.circle.fill")
+                    .labelStyle(.iconOnly)
             }
-            .disabled(!model.isReady)
-            .accessibilityLabel("FTC event code")
-            .accessibilityHint("Enter an event code and press Return")
-            .help("Enter an event code and press Return (⌘L)")
-    }
-}
-
-private struct PythonPackagesRequiredView: View {
-    let message: String
-    let retry: () -> Void
-
-    var body: some View {
-        ContentUnavailableView {
-            Label("Python Packages Required", systemImage: "shippingbox")
-        } description: {
-            Text(message)
-                .textSelection(.enabled)
-        } actions: {
-            Button("Try Again", action: retry)
-                .buttonStyle(.borderedProminent)
-                .keyboardShortcut(.defaultAction)
+            .disabled(!model.isReady || model.eventCode.trimmingCharacters(in: .whitespaces).isEmpty)
+            .help("Load Event")
+        }
+        .onChange(of: model.focusToken) { _, _ in
+            isFocused = model.isReady
         }
     }
 }
@@ -96,7 +82,7 @@ private struct PythonRequiredView: View {
         ContentUnavailableView {
             Label("Python 3 Required", systemImage: "terminal")
         } description: {
-            Text("Install the latest Python 3 for macOS. FTC Event Scout will find and use it automatically—there is no runtime setting to configure.")
+            Text("Install the latest Python 3 for macOS. FTC Event Scout finds and uses it automatically; there is no Python setting to configure.")
         } actions: {
             HStack {
                 Link(destination: downloadURL) {
@@ -115,11 +101,11 @@ private struct LaunchingView: View {
         ContentUnavailableView {
             Label("Starting FTC Event Scout", systemImage: "chart.bar.xaxis")
         } description: {
-            Text("Preparing the local scouting server and dashboard…")
+            Text("Preparing the local event data service…")
         } actions: {
             ProgressView()
                 .controlSize(.small)
-                .accessibilityLabel("Starting local server")
+                .accessibilityLabel("Starting local data service")
         }
     }
 }
@@ -131,7 +117,7 @@ private struct LaunchFailureView: View {
 
     var body: some View {
         ContentUnavailableView {
-            Label("Local Server Unavailable", systemImage: "exclamationmark.triangle")
+            Label("Event Data Unavailable", systemImage: "exclamationmark.triangle")
         } description: {
             Text(message)
                 .textSelection(.enabled)

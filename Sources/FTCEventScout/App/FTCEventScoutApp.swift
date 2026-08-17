@@ -1,13 +1,11 @@
-import AppKit
 import SwiftUI
 
 @main
 struct FTCEventScoutApp: App {
-    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var model = AppModel()
 
     var body: some Scene {
-        Window("FTC Event Scout", id: "main") {
+        WindowGroup {
             ContentView(model: model)
         }
         .defaultSize(width: 1_180, height: 760)
@@ -15,17 +13,19 @@ struct FTCEventScoutApp: App {
         .windowResizability(.contentMinSize)
         .windowToolbarStyle(.unified)
         .commands {
+            SidebarCommands()
+
             CommandMenu("Scout") {
                 Button("Load Event…", action: model.focusEventCode)
                     .keyboardShortcut("l", modifiers: .command)
 
-                Button("Reload Dashboard", action: model.reloadDashboard)
+                Button("Refresh Event", action: model.refreshEvent)
                     .keyboardShortcut("r", modifiers: .command)
-                    .disabled(!model.isReady)
+                    .disabled(!model.isReady || model.eventCode.isEmpty)
 
                 Divider()
 
-                Button("Restart Local Server", action: model.restartBackend)
+                Button("Restart Data Service", action: model.restartBackend)
                     .keyboardShortcut("r", modifiers: [.command, .shift])
             }
         }
@@ -34,16 +34,5 @@ struct FTCEventScoutApp: App {
             SettingsView(model: model)
         }
         .windowResizability(.contentSize)
-    }
-}
-
-final class AppDelegate: NSObject, NSApplicationDelegate {
-    func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
-    }
-
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        true
     }
 }

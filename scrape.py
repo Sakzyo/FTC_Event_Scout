@@ -1,9 +1,11 @@
 import base64
 import csv
+import json
 import os
 from pathlib import Path
-
-import requests
+import urllib.error
+import urllib.parse
+import urllib.request
 
 BASE_URL = "https://ftc-api.firstinspires.org"
 SEASON = "2025"
@@ -47,14 +49,28 @@ def _authorization_headers():
 
 
 def make_request(path, params=None):
-    response = requests.get(
-        f"{BASE_URL}/v2.0/{SEASON}/{path}",
-        headers=_authorization_headers(),
-        params=params,
-        timeout=30,
+    url = f"{BASE_URL}/v2.0/{SEASON}/{path}"
+    if params:
+        url = f"{url}?{urllib.parse.urlencode(params)}"
+    request = urllib.request.Request(
+        url,
+        headers={**_authorization_headers(), "Accept": "application/json"},
+        method="GET",
     )
-    response.raise_for_status()
-    return response.json()
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        if exc.code == 401:
+            raise RuntimeError(
+                "FIRST Events rejected the saved credentials (401 Unauthorized). "
+                "Open Settings and verify the API username and token."
+            ) from exc
+        raise RuntimeError(
+            f"FIRST Events request failed with HTTP {exc.code}: {exc.reason}"
+        ) from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"Could not reach FIRST Events: {exc.reason}") from exc
 
 
 def load_matches(event_code):

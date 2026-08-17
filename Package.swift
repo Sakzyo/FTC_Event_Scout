@@ -14,9 +14,9 @@ let package = Package(
         .executableTarget(
             name: "FTCEventScout",
             path: "Sources/FTCEventScout",
+            exclude: ["Resources"],
             linkerSettings: [
                 .linkedFramework("Security"),
-                .linkedFramework("WebKit"),
             ]
         ),
     ]

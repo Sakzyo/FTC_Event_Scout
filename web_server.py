@@ -1,5 +1,4 @@
 import argparse
-from functools import partial
 import json
 import os
 from pathlib import Path
@@ -7,7 +6,7 @@ import re
 import shutil
 import socket
 import sys
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from calculate_opr_from_csv import generate_event_opr_csv
 from historical_opr import fetch_event_preview
@@ -24,14 +23,14 @@ def _looks_like_no_matches_error(exc):
     return "no matches found" in msg or "no matches for" in msg
 
 
-class OPRWebHandler(SimpleHTTPRequestHandler):
+class OPRAPIHandler(BaseHTTPRequestHandler):
     def end_headers(self):
         self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
         super().end_headers()
 
     def do_POST(self):
         if self.path != "/api/generate-opr":
-            self.send_error(404, "Endpoint not found")
+            self._send_json(404, {"error": "Endpoint not found."})
             return
 
         try:
@@ -128,6 +127,12 @@ class OPRWebHandler(SimpleHTTPRequestHandler):
         except Exception as exc:  # noqa: BLE001
             self._send_json(500, {"error": f"Internal server error: {exc}"})
 
+    def do_GET(self):
+        if self.path == "/api/health":
+            self._send_json(200, {"status": "ok"})
+            return
+        self._send_json(404, {"error": "Endpoint not found."})
+
     def _send_json(self, status_code, data):
         body = json.dumps(data).encode("utf-8")
         self.send_response(status_code)
@@ -147,15 +152,10 @@ def parse_args(argv):
 
 
 def prepare_data_directory(resource_dir, data_dir):
-    """Stage mutable web assets and seed CSVs outside the read-only app bundle."""
+    """Stage seed CSVs in the app's disposable cache directory."""
     resource_dir = resource_dir.expanduser().resolve()
     data_dir = data_dir.expanduser().resolve()
     data_dir.mkdir(parents=True, exist_ok=True)
-
-    for filename in ("index.html", "styles.css", "favicon.svg"):
-        source = resource_dir / filename
-        if source.is_file() and source.resolve() != (data_dir / filename).resolve():
-            shutil.copy2(source, data_dir / filename)
 
     for directory_name in ("event_results", "events_teams_opr"):
         source_dir = resource_dir / directory_name
@@ -194,8 +194,7 @@ def main(argv=None):
     if selected_port != args.port:
         print(f"Port {args.port} is in use. Falling back to {selected_port}.", flush=True)
 
-    handler = partial(OPRWebHandler, directory=str(data_dir))
-    server = ThreadingHTTPServer((args.host, selected_port), handler)
+    server = ThreadingHTTPServer((args.host, selected_port), OPRAPIHandler)
     actual_port = server.server_address[1]
     url = f"http://{args.host}:{actual_port}"
     print(f"READY {url}", flush=True)
