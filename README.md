@@ -2,6 +2,8 @@
 
 FTC Event OPR Scout is a local web dashboard for inspecting FIRST Tech Challenge event results and estimating each team's scoring contribution with Offensive Power Rating (OPR). Enter an FTC event code to refresh its match data from the official FIRST API, calculate several OPR variants, and explore sortable rankings, event highlights, team match histories, score breakdowns, and browser-local scouting tags.
 
+New to OPR? The Blue Alliance's [The Math Behind OPR — An Introduction](https://blog.thebluealliance.com/2017/10/05/the-math-behind-opr-an-introduction/) explains the core idea, assumptions, and least-squares math behind the metric.
+
 If an event has registered teams but no matches yet, the dashboard falls back to FTCScout and shows each team's highest historical OPR instead.
 
 ## What it does
