@@ -1,0 +1,1448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FTC Event OPR Scout</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="page">
+    <section class="card">
+      <div class="header">
+        <h1>FTC Event OPR Scout</h1>
+        <div class="subtitle">Enter an event code to load OPR metrics. If missing, the server will generate and save the OPR CSV automatically.</div>
+      </div>
+
+      <form id="event-form" class="controls">
+        <input id="event-code" name="event" placeholder="Example: USIACMP" required />
+        <button type="submit">Load Event</button>
+      </form>
+
+      <div id="status" class="status">Waiting for event code...</div>
+
+      <div class="content-layout">
+        <section class="opr-window">
+          <div class="opr-window-title">Team OPR Table</div>
+          <div class="table-wrap">
+            <table id="opr-table" aria-live="polite">
+              <thead></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+
+        <aside class="event-summary" aria-live="polite">
+          <h2>Event Highlights</h2>
+          <div class="highlight-cards">
+            <section class="highlight-card">
+              <div class="summary-label">Event High Score</div>
+              <div id="event-high-score" class="summary-score">-</div>
+              <div id="event-high-score-note" class="summary-note">Load an event to view summary details.</div>
+              <div id="event-high-score-list" class="high-score-list"></div>
+            </section>
+
+            <section class="highlight-card">
+              <div class="summary-label">Event Highest Non-Penalty Score</div>
+              <div id="event-high-non-penalty-score" class="summary-score">-</div>
+              <div id="event-high-non-penalty-note" class="summary-note">Load an event to view summary details.</div>
+              <div id="event-high-non-penalty-list" class="high-score-list"></div>
+            </section>
+
+            <section class="highlight-card">
+              <div class="summary-label">Event Highest Auto Score</div>
+              <div id="event-high-auto-score" class="summary-score">-</div>
+              <div id="event-high-auto-note" class="summary-note">Load an event to view summary details.</div>
+              <div id="event-high-auto-list" class="high-score-list"></div>
+            </section>
+
+            <section class="highlight-card">
+              <div class="summary-label">Event Highest Teleop Score</div>
+              <div id="event-high-teleop-score" class="summary-score">-</div>
+              <div id="event-high-teleop-note" class="summary-note">Load an event to view summary details.</div>
+              <div id="event-high-teleop-list" class="high-score-list"></div>
+            </section>
+          </div>
+        </aside>
+      </div>
+
+      <div id="team-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h2 id="modal-title">Team Match History</h2>
+            <button id="modal-close" class="modal-close" type="button" aria-label="Close popup">Close</button>
+          </div>
+          <div id="modal-body" class="modal-body"></div>
+        </div>
+      </div>
+
+      <div id="tag-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="tag-modal-title">
+        <div class="modal-content tag-modal-content">
+          <div class="modal-header">
+            <h2 id="tag-modal-title">Add Tag</h2>
+            <button id="tag-modal-close" class="modal-close" type="button" aria-label="Close">Close</button>
+          </div>
+          <div class="tag-modal-body">
+            <div id="existing-tags-section" class="existing-tags-section">
+              <label class="tag-field-label">Existing Tags</label>
+              <div id="existing-tags-list" class="existing-tags-list"></div>
+            </div>
+            <div class="tag-separator"><span>or create new</span></div>
+            <label class="tag-field-label" for="tag-name-input">Tag Name</label>
+            <input id="tag-name-input" class="tag-name-input" type="text" placeholder="Enter tag name..." maxlength="40" />
+            <label class="tag-field-label">Tag Color</label>
+            <div id="tag-color-options" class="tag-color-options"></div>
+            <div class="tag-preview-row">
+              <span class="tag-field-label">Preview</span>
+              <span id="tag-preview" class="team-tag">Sample</span>
+            </div>
+            <div class="tag-modal-actions">
+              <button id="tag-modal-cancel" class="modal-close" type="button">Cancel</button>
+              <button id="tag-modal-save" class="tag-modal-save" type="button">Add Tag</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer">Source files: events_teams_opr/&lt;EVENT_CODE&gt; OPR.csv, generated from event_results/&lt;EVENT_CODE&gt; Match Details.csv by POST /api/generate-opr</div>
+    </section>
+  </main>
+
+  <script>
+    const form = document.getElementById("event-form");
+    const input = document.getElementById("event-code");
+    const statusEl = document.getElementById("status");
+    const table = document.getElementById("opr-table");
+    const thead = table.querySelector("thead");
+    const tbody = table.querySelector("tbody");
+    const highlightEls = {
+      final: {
+        score: document.getElementById("event-high-score"),
+        note: document.getElementById("event-high-score-note"),
+        list: document.getElementById("event-high-score-list"),
+      },
+      nonPenalty: {
+        score: document.getElementById("event-high-non-penalty-score"),
+        note: document.getElementById("event-high-non-penalty-note"),
+        list: document.getElementById("event-high-non-penalty-list"),
+      },
+      auto: {
+        score: document.getElementById("event-high-auto-score"),
+        note: document.getElementById("event-high-auto-note"),
+        list: document.getElementById("event-high-auto-list"),
+      },
+      teleop: {
+        score: document.getElementById("event-high-teleop-score"),
+        note: document.getElementById("event-high-teleop-note"),
+        list: document.getElementById("event-high-teleop-list"),
+      },
+    };
+    const modal = document.getElementById("team-modal");
+    const modalCloseButton = document.getElementById("modal-close");
+    const modalTitle = document.getElementById("modal-title");
+    const modalBody = document.getElementById("modal-body");
+
+    let currentHeaders = [];
+    let currentRows = [];
+    let currentSort = { columnIndex: 0, direction: "asc" };
+    let currentEventCode = "";
+    let currentEventMatchRows = [];
+
+    function getTeamTags(eventCode, teamNumber) {
+      const key = `tags_${eventCode}_${teamNumber}`;
+      const stored = localStorage.getItem(key);
+      return stored ? JSON.parse(stored) : [];
+    }
+
+    function setTeamTags(eventCode, teamNumber, tags) {
+      const key = `tags_${eventCode}_${teamNumber}`;
+      if (tags.length) {
+        localStorage.setItem(key, JSON.stringify(tags));
+      } else {
+        localStorage.removeItem(key);
+      }
+    }
+
+    function getAllExistingTags(eventCode) {
+      const tagMap = new Map();
+      const prefix = `tags_${eventCode}_`;
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key.startsWith(prefix)) continue;
+        const tags = JSON.parse(localStorage.getItem(key));
+        tags.forEach((tag) => {
+          if (tag.text) {
+            const id = `${tag.text}|${tag.bg}|${tag.color}`;
+            if (!tagMap.has(id)) tagMap.set(id, tag);
+          }
+        });
+      }
+      return [...tagMap.values()];
+    }
+
+    function promptAddTag(teamNumber) {
+      const tagColors = [
+        { name: "Blue", bg: "#dbeafe", text: "#1e3a6e" },
+        { name: "Green", bg: "#d1fae5", text: "#065f46" },
+        { name: "Red", bg: "#fee2e2", text: "#991b1b" },
+        { name: "Yellow", bg: "#fef9c3", text: "#854d0e" },
+        { name: "Purple", bg: "#ede9fe", text: "#5b21b6" },
+        { name: "Pink", bg: "#fce7f3", text: "#9d174d" },
+        { name: "Orange", bg: "#ffedd5", text: "#9a3412" },
+        { name: "Gray", bg: "#e4ecf7", text: "#1e3a5f" },
+      ];
+
+      const tagModal = document.getElementById("tag-modal");
+      const tagNameInput = document.getElementById("tag-name-input");
+      const tagColorOptions = document.getElementById("tag-color-options");
+      const tagPreview = document.getElementById("tag-preview");
+      const tagSaveBtn = document.getElementById("tag-modal-save");
+      const tagCancelBtn = document.getElementById("tag-modal-cancel");
+      const tagCloseBtn = document.getElementById("tag-modal-close");
+      const tagTitle = document.getElementById("tag-modal-title");
+
+      const existingTagsSection = document.getElementById("existing-tags-section");
+      const existingTagsList = document.getElementById("existing-tags-list");
+
+      tagTitle.textContent = `Add Tag for Team ${teamNumber}`;
+      tagNameInput.value = "";
+      let selectedColor = tagColors[0];
+
+      const currentTeamTags = getTeamTags(currentEventCode, teamNumber);
+      const allExisting = getAllExistingTags(currentEventCode)
+        .filter((et) => !currentTeamTags.some((ct) => ct.text === et.text && ct.bg === et.bg && ct.color === et.color));
+
+      existingTagsList.innerHTML = "";
+      if (allExisting.length) {
+        existingTagsSection.style.display = "";
+        allExisting.forEach((et) => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "existing-tag-btn team-tag";
+          btn.textContent = et.text;
+          btn.style.background = et.bg;
+          btn.style.color = et.color;
+          btn.addEventListener("click", () => {
+            const tags = getTeamTags(currentEventCode, teamNumber);
+            tags.push({ text: et.text, bg: et.bg, color: et.color });
+            setTeamTags(currentEventCode, teamNumber, tags);
+            cleanup();
+            renderTable(currentHeaders, currentRows);
+            refreshEventSummary();
+          });
+          existingTagsList.appendChild(btn);
+        });
+      } else {
+        existingTagsSection.style.display = "none";
+      }
+
+      tagColorOptions.innerHTML = "";
+      tagColors.forEach((color) => {
+        const swatch = document.createElement("button");
+        swatch.type = "button";
+        swatch.className = "tag-color-swatch" + (color === selectedColor ? " selected" : "");
+        swatch.style.background = color.bg;
+        swatch.style.color = color.text;
+        swatch.textContent = "A";
+        swatch.title = color.name;
+        swatch.addEventListener("click", () => {
+          selectedColor = color;
+          tagColorOptions.querySelectorAll(".tag-color-swatch").forEach((s) => s.classList.remove("selected"));
+          swatch.classList.add("selected");
+          updatePreview();
+        });
+        tagColorOptions.appendChild(swatch);
+      });
+
+      function updatePreview() {
+        const name = tagNameInput.value.trim() || "Sample";
+        tagPreview.textContent = name;
+        tagPreview.style.background = selectedColor.bg;
+        tagPreview.style.color = selectedColor.text;
+      }
+      updatePreview();
+      tagNameInput.addEventListener("input", updatePreview);
+
+      tagModal.classList.remove("hidden");
+      tagNameInput.focus();
+
+      function cleanup() {
+        tagModal.classList.add("hidden");
+        tagNameInput.removeEventListener("input", updatePreview);
+        tagSaveBtn.replaceWith(tagSaveBtn.cloneNode(true));
+        tagCancelBtn.replaceWith(tagCancelBtn.cloneNode(true));
+        tagCloseBtn.replaceWith(tagCloseBtn.cloneNode(true));
+        tagModal.replaceWith(tagModal.cloneNode(true));
+      }
+
+      function save() {
+        const trimmed = tagNameInput.value.trim();
+        if (!trimmed) return;
+        const tags = getTeamTags(currentEventCode, teamNumber);
+        tags.push({ text: trimmed, bg: selectedColor.bg, color: selectedColor.text });
+        setTeamTags(currentEventCode, teamNumber, tags);
+        cleanup();
+        renderTable(currentHeaders, currentRows);
+      }
+
+      function cancel() {
+        cleanup();
+      }
+
+      tagSaveBtn.addEventListener("click", save);
+      tagCancelBtn.addEventListener("click", cancel);
+      tagCloseBtn.addEventListener("click", cancel);
+      tagModal.addEventListener("click", (e) => {
+        if (e.target === tagModal) cancel();
+      });
+      tagNameInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); save(); }
+      });
+    }
+
+    function removeTeamTag(teamNumber, tagIndex) {
+      const tags = getTeamTags(currentEventCode, teamNumber);
+      tags.splice(tagIndex, 1);
+      setTeamTags(currentEventCode, teamNumber, tags);
+      renderTable(currentHeaders, currentRows);
+    }
+
+    function renderTagsCell(teamNumber) {
+      const td = document.createElement("td");
+      td.className = "tags-cell";
+      const tags = getTeamTags(currentEventCode, teamNumber);
+      tags.forEach((tag, idx) => {
+        const span = document.createElement("span");
+        span.className = "team-tag";
+        span.textContent = tag.text || tag;
+        if (tag.bg) span.style.background = tag.bg;
+        if (tag.color) span.style.color = tag.color;
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "tag-remove";
+        removeBtn.textContent = "×";
+        removeBtn.title = `Remove "${tag.text || tag}"`;
+        removeBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          removeTeamTag(teamNumber, idx);
+        });
+        span.appendChild(removeBtn);
+        td.appendChild(span);
+      });
+      const addBtn = document.createElement("button");
+      addBtn.type = "button";
+      addBtn.className = "tag-add";
+      addBtn.textContent = "+";
+      addBtn.title = "Add tag";
+      addBtn.addEventListener("click", () => promptAddTag(teamNumber));
+      td.appendChild(addBtn);
+      return td;
+    }
+
+    function setStatus(message, kind = "") {
+      statusEl.textContent = message;
+      statusEl.className = `status ${kind}`.trim();
+    }
+
+    function parseCsv(text) {
+      const lines = text
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
+
+      if (lines.length === 0) {
+        return { headers: [], rows: [] };
+      }
+
+      const headers = lines[0].split(",").map((cell) => cell.trim());
+      const rows = lines.slice(1).map((line) => line.split(",").map((cell) => cell.trim()));
+      return { headers, rows };
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
+    function parseFloatMaybe(value) {
+      if (value === undefined || value === null) {
+        return null;
+      }
+      const text = String(value).trim();
+      if (!text) {
+        return null;
+      }
+      const num = Number(text);
+      return Number.isFinite(num) ? num : null;
+    }
+
+    function firstNumber(row, keys) {
+      for (const key of keys) {
+        if (!(key in row)) {
+          continue;
+        }
+        const value = parseFloatMaybe(row[key]);
+        if (value !== null) {
+          return value;
+        }
+      }
+      return null;
+    }
+
+    function rowsToObjects(headers, rows) {
+      return rows.map((row) => {
+        const obj = {};
+        headers.forEach((header, idx) => {
+          obj[header] = row[idx] ?? "";
+        });
+        return obj;
+      });
+    }
+
+    function setSummaryLoading() {
+      Object.values(highlightEls).forEach((els) => {
+        els.score.textContent = "...";
+        els.note.textContent = "Calculating...";
+        els.list.innerHTML = "";
+      });
+    }
+
+    function setMetricSummary(metricKey, scoreText, noteText, listHtml = "") {
+      const els = highlightEls[metricKey];
+      els.score.textContent = scoreText;
+      els.note.textContent = noteText;
+      els.list.innerHTML = listHtml;
+    }
+
+    function formatScoreStat(value) {
+      if (value === null) {
+        return "-";
+      }
+      return Number.isInteger(value) ? String(value) : value.toFixed(1);
+    }
+
+    function displayMatchTitle(series, matchNumber) {
+      const seriesValue = parseFloatMaybe(series);
+      if (seriesValue === 0) {
+        return `Qualification - ${matchNumber || "-"}`;
+      }
+      if (seriesValue !== null) {
+        return `Playoff - ${series}`;
+      }
+      return `Match - ${matchNumber || "-"}`;
+    }
+
+    function findMetricTopEntries(rows, metricKey) {
+      let bestScore = null;
+      const entries = [];
+
+      rows.forEach((row) => {
+        const redFinal = parseFloatMaybe(row["Red Final Score"]);
+        const blueFinal = parseFloatMaybe(row["Blue Final Score"]);
+        const redFoulScored = parseFloatMaybe(row["Red Foul Score"]);
+        const blueFoulScored = parseFloatMaybe(row["Blue Foul Score"]);
+        const redFoulCommitted = parseFloatMaybe(row["Red Foul Committed"]);
+        const blueFoulCommitted = parseFloatMaybe(row["Blue Foul Committed"]);
+
+        const redValue = metricKey === "final"
+          ? redFinal
+          : (metricKey === "nonPenalty"
+            ? (redFinal !== null
+              ? (redFoulScored !== null
+                ? redFinal - redFoulScored
+                : (blueFoulCommitted !== null ? redFinal - blueFoulCommitted : null))
+              : null)
+            : (metricKey === "auto"
+              ? parseFloatMaybe(row["Red Auto Score"])
+              : parseFloatMaybe(row["Red Teleop Score"])));
+
+        const blueValue = metricKey === "final"
+          ? blueFinal
+          : (metricKey === "nonPenalty"
+            ? (blueFinal !== null
+              ? (blueFoulScored !== null
+                ? blueFinal - blueFoulScored
+                : (redFoulCommitted !== null ? blueFinal - redFoulCommitted : null))
+              : null)
+            : (metricKey === "auto"
+              ? parseFloatMaybe(row["Blue Auto Score"])
+              : parseFloatMaybe(row["Blue Teleop Score"])));
+
+        const candidates = [
+          {
+            alliance: "Red",
+            score: redValue,
+            teams: [row["Red1 Team Number"] || "-", row["Red2 Team Number"] || "-"],
+            series: row["Series"],
+            match: row["Match Number"],
+          },
+          {
+            alliance: "Blue",
+            score: blueValue,
+            teams: [row["Blue1 Team Number"] || "-", row["Blue2 Team Number"] || "-"],
+            series: row["Series"],
+            match: row["Match Number"],
+          },
+        ];
+
+        candidates.forEach((candidate) => {
+          if (candidate.score === null) {
+            return;
+          }
+
+          if (bestScore === null || candidate.score > bestScore) {
+            bestScore = candidate.score;
+            entries.length = 0;
+            entries.push(candidate);
+          } else if (candidate.score === bestScore) {
+            entries.push(candidate);
+          }
+        });
+      });
+
+      return { bestScore, entries };
+    }
+
+    function renderTeamTagsHtml(teamNumber) {
+      const tags = getTeamTags(currentEventCode, teamNumber);
+      if (!tags.length) return "";
+      if (tags.length === 1) {
+        const tag = tags[0];
+        const text = escapeHtml(tag.text || tag);
+        const bg = tag.bg || "#e4ecf7";
+        const color = tag.color || "#1e3a5f";
+        return `<span class="team-tag" style="background:${bg};color:${color}">${text}</span>`;
+      }
+      const firstTag = tags[0];
+      const firstText = escapeHtml(firstTag.text || firstTag);
+      const firstBg = firstTag.bg || "#e4ecf7";
+      const firstColor = firstTag.color || "#1e3a5f";
+      const restHtml = tags.slice(1).map((tag) => {
+        const text = escapeHtml(tag.text || tag);
+        const bg = tag.bg || "#e4ecf7";
+        const color = tag.color || "#1e3a5f";
+        return `<span class="team-tag" style="background:${bg};color:${color}">${text}</span>`;
+      }).join("");
+      return `<span class="tags-dropdown">
+        <span class="team-tag tags-dropdown-toggle" style="background:${firstBg};color:${firstColor}">${firstText} <span class="tags-badge">+${tags.length - 1}</span></span>
+        <span class="tags-dropdown-menu">${tags.map((tag) => {
+          const text = escapeHtml(tag.text || tag);
+          const bg = tag.bg || "#e4ecf7";
+          const color = tag.color || "#1e3a5f";
+          return `<span class="team-tag" style="background:${bg};color:${color}">${text}</span>`;
+        }).join("")}</span>
+      </span>`;
+    }
+
+    function renderMetricEntries(entries) {
+      return entries.map((entry) => {
+        const title = displayMatchTitle(entry.series, entry.match);
+        const team1Tags = renderTeamTagsHtml(entry.teams[0]);
+        const team2Tags = renderTeamTagsHtml(entry.teams[1]);
+        return `
+          <article class="high-score-entry">
+            <div class="high-score-entry-title">${escapeHtml(title)}</div>
+            <div class="high-score-entry-meta">${escapeHtml(entry.alliance)} Alliance</div>
+            <div class="high-score-entry-teams">
+              <span class="entry-team">${escapeHtml(entry.teams[0])}${team1Tags}</span>
+              <span class="entry-team">${escapeHtml(entry.teams[1])}${team2Tags}</span>
+            </div>
+          </article>
+        `;
+      }).join("");
+    }
+
+    async function refreshEventSummary() {
+      try {
+        const rows = await ensureMatchRowsLoaded();
+        const metricConfigs = [
+          { key: "final", emptyMessage: "No final scores available for this event yet.", singleLabel: "Top scoring alliance" },
+          { key: "nonPenalty", emptyMessage: "No non-penalty scores available for this event yet.", singleLabel: "Top non-penalty alliance" },
+          { key: "auto", emptyMessage: "No auto scores available for this event yet.", singleLabel: "Top auto alliance" },
+          { key: "teleop", emptyMessage: "No teleop scores available for this event yet.", singleLabel: "Top teleop alliance" },
+        ];
+
+        metricConfigs.forEach((config) => {
+          const { bestScore, entries } = findMetricTopEntries(rows, config.key);
+          if (bestScore === null || !entries.length) {
+            setMetricSummary(config.key, "-", config.emptyMessage, "");
+            return;
+          }
+
+          const noteText = entries.length === 1
+            ? config.singleLabel
+            : `${entries.length} alliances tied for top score`;
+          setMetricSummary(config.key, formatScoreStat(bestScore), noteText, renderMetricEntries(entries));
+        });
+      } catch (_error) {
+        setMetricSummary("final", "-", "Could not load event high score details.");
+        setMetricSummary("nonPenalty", "-", "Could not load event non-penalty score details.");
+        setMetricSummary("auto", "-", "Could not load event auto score details.");
+        setMetricSummary("teleop", "-", "Could not load event teleop score details.");
+      }
+    }
+
+    function openModal(title, htmlContent) {
+      modalTitle.textContent = title;
+      modalBody.innerHTML = htmlContent;
+      modal.classList.remove("hidden");
+    }
+
+    function closeModal() {
+      modal.classList.add("hidden");
+      modalBody.innerHTML = "";
+    }
+
+    async function ensureMatchRowsLoaded() {
+      if (!currentEventCode) {
+        throw new Error("No event code selected.");
+      }
+      if (currentEventMatchRows.length) {
+        return currentEventMatchRows;
+      }
+
+      const matchCsvPath = `event_results/${encodeURIComponent(currentEventCode)}%20Match%20Details.csv`;
+      const response = await fetch(matchCsvPath, { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(`Match details file not found for ${currentEventCode}.`);
+      }
+
+      const text = await response.text();
+      const { headers, rows } = parseCsv(text);
+      currentEventMatchRows = rowsToObjects(headers, rows);
+      return currentEventMatchRows;
+    }
+
+    function getAllianceBreakdown(row, alliancePrefix) {
+      const valueOrDash = (fieldName) => {
+        const value = row[`${alliancePrefix} ${fieldName}`];
+        return value === undefined || value === null || String(value).trim() === "" ? "-" : String(value).trim();
+      };
+
+      return {
+        autoScore: valueOrDash("Auto Score"),
+        autoArtifactPoints: valueOrDash("Auto Artifact Points"),
+        autoClassifiedArtifacts: valueOrDash("Auto Classified Artifacts"),
+        autoOverflowArtifacts: valueOrDash("Auto Overflow Artifacts"),
+        autoPatternPoints: valueOrDash("Auto Pattern Points"),
+        autoLeavePoints: valueOrDash("Auto Leave Points"),
+        teleopScore: valueOrDash("Teleop Score"),
+        teleopArtifactPoints: valueOrDash("Teleop Artifact Points"),
+        teleopClassifiedArtifacts: valueOrDash("Teleop Classified Artifacts"),
+        teleopOverflowArtifacts: valueOrDash("Teleop Overflow Artifacts"),
+        teleopPatternPoints: valueOrDash("Teleop Pattern Points"),
+        teleopDepotPoints: valueOrDash("Teleop Depot Points"),
+        endgameScore: valueOrDash("Endgame Score"),
+        foulCommitted: valueOrDash("Foul Committed"),
+        majorFouls: valueOrDash("Major Fouls"),
+        minorFouls: valueOrDash("Minor Fouls"),
+        finalScore: valueOrDash("Final Score"),
+      };
+    }
+
+    function teamMatchesFromRows(teamNumber, rows) {
+      const teamText = String(teamNumber);
+      const matches = rows
+        .filter((row) => {
+          return (
+            row["Red1 Team Number"] === teamText
+            || row["Red2 Team Number"] === teamText
+            || row["Blue1 Team Number"] === teamText
+            || row["Blue2 Team Number"] === teamText
+          );
+        })
+        .map((row) => {
+          const isRed = row["Red1 Team Number"] === teamText || row["Red2 Team Number"] === teamText;
+          const alliance = isRed ? "Red" : "Blue";
+
+          const partner = isRed
+            ? (row["Red1 Team Number"] === teamText ? row["Red2 Team Number"] : row["Red1 Team Number"])
+            : (row["Blue1 Team Number"] === teamText ? row["Blue2 Team Number"] : row["Blue1 Team Number"]);
+
+          const opp1 = isRed ? row["Blue1 Team Number"] : row["Red1 Team Number"];
+          const opp2 = isRed ? row["Blue2 Team Number"] : row["Red2 Team Number"];
+
+          const redScore = parseFloatMaybe(row["Red Final Score"]);
+          const blueScore = parseFloatMaybe(row["Blue Final Score"]);
+          const allianceScore = isRed ? redScore : blueScore;
+          const opponentScore = isRed ? blueScore : redScore;
+
+          let winnerAlliance = "";
+          if (redScore !== null && blueScore !== null) {
+            if (redScore > blueScore) {
+              winnerAlliance = "Red";
+            } else if (blueScore > redScore) {
+              winnerAlliance = "Blue";
+            } else {
+              winnerAlliance = "Tie";
+            }
+          }
+
+          let result = "-";
+          if (allianceScore !== null && opponentScore !== null) {
+            if (allianceScore > opponentScore) {
+              result = "Win";
+            } else if (allianceScore < opponentScore) {
+              result = "Loss";
+            } else {
+              result = "Tie";
+            }
+          }
+
+          return {
+            series: row["Series"] || "",
+            match: row["Match Number"] || "",
+            alliance,
+            partner: partner || "-",
+            opp1: opp1 || "-",
+            opp2: opp2 || "-",
+            redScore: redScore === null ? "-" : redScore,
+            blueScore: blueScore === null ? "-" : blueScore,
+            allianceScore: allianceScore === null ? "-" : allianceScore,
+            opponentScore: opponentScore === null ? "-" : opponentScore,
+            result,
+            winnerAlliance,
+            redBreakdown: getAllianceBreakdown(row, "Red"),
+            blueBreakdown: getAllianceBreakdown(row, "Blue"),
+          };
+        });
+
+      matches.sort((a, b) => {
+        const seriesA = parseFloatMaybe(a.series) ?? 0;
+        const seriesB = parseFloatMaybe(b.series) ?? 0;
+        if (seriesA !== seriesB) {
+          return seriesA - seriesB;
+        }
+        const matchA = parseFloatMaybe(a.match) ?? 0;
+        const matchB = parseFloatMaybe(b.match) ?? 0;
+        return matchA - matchB;
+      });
+
+      return matches;
+    }
+
+    function teamMatchesTableHtml(teamNumber, matches) {
+      if (!matches.length) {
+        return `<p>No matches found for team ${escapeHtml(teamNumber)} at event ${escapeHtml(currentEventCode)}.</p>`;
+      }
+
+      const cardsHtml = matches.map((match) => {
+        const breakdownFields = [
+          { label: "Auto", key: "autoScore", kind: "major" },
+          { label: "Leave Points", key: "autoLeavePoints", kind: "sub" },
+          { label: "Artifacts", key: "autoArtifactPoints", kind: "sub", details: [
+            { label: "Classified", key: "autoClassifiedArtifacts" },
+            { label: "Overflow", key: "autoOverflowArtifacts" },
+          ]},
+          { label: "Pattern", key: "autoPatternPoints", kind: "sub" },
+          { label: "DC", key: "teleopScore", kind: "major" },
+          { label: "Base Points", key: "endgameScore", kind: "sub" },
+          { label: "Artifacts", key: "teleopArtifactPoints", kind: "sub", details: [
+            { label: "Classified", key: "teleopClassifiedArtifacts" },
+            { label: "Overflow", key: "teleopOverflowArtifacts" },
+          ]},
+          { label: "Pattern", key: "teleopPatternPoints", kind: "sub" },
+          { label: "Depot", key: "teleopDepotPoints", kind: "sub" },
+          { label: "Penalties", key: "foulCommitted", kind: "section", swap: true },
+          { label: "Majors", key: "majorFouls", kind: "sub" },
+          { label: "Minors", key: "minorFouls", kind: "sub" },
+        ];
+        const renderBreakdownRows = () => breakdownFields.map((field) => {
+          const rowClass = field.kind === "major" ? "row-major" : (field.kind === "section" ? "row-section" : "row-sub");
+          const redVal = field.swap ? match.blueBreakdown[field.key] : match.redBreakdown[field.key];
+          const blueVal = field.swap ? match.redBreakdown[field.key] : match.blueBreakdown[field.key];
+          let detailRows = "";
+          if (field.details) {
+            detailRows = field.details.map((d) => `
+              <tr class="breakdown-row row-detail">
+                <td class="breakdown-category">${escapeHtml(d.label)}</td>
+                <td class="breakdown-red-cell">${escapeHtml(match.redBreakdown[d.key] ?? "-")}</td>
+                <td class="breakdown-blue-cell">${escapeHtml(match.blueBreakdown[d.key] ?? "-")}</td>
+              </tr>
+            `).join("");
+          }
+          if (field.details) {
+            return `
+              <tr class="breakdown-row ${rowClass} row-expandable" onclick="this.classList.toggle('expanded');let s=this;while((s=s.nextElementSibling)&&s.classList.contains('row-detail'))s.classList.toggle('visible')">
+                <td class="breakdown-category"><span class="expand-chevron">›</span>${escapeHtml(field.label)}</td>
+                <td class="breakdown-red-cell">${escapeHtml(redVal ?? "-")}</td>
+                <td class="breakdown-blue-cell">${escapeHtml(blueVal ?? "-")}</td>
+              </tr>
+              ${detailRows}
+            `;
+          }
+          return `
+            <tr class="breakdown-row ${rowClass}">
+              <td class="breakdown-category">${escapeHtml(field.label)}</td>
+              <td class="breakdown-red-cell">${escapeHtml(redVal ?? "-")}</td>
+              <td class="breakdown-blue-cell">${escapeHtml(blueVal ?? "-")}</td>
+            </tr>
+          `;
+        }).join("");
+        const isRed = match.alliance === "Red";
+        const seriesValue = parseFloatMaybe(match.series);
+        const matchDisplayTitle = seriesValue === 0
+          ? `Qualification - ${match.match}`
+          : (seriesValue !== null ? `Playoff - ${match.series}` : `Match - ${match.match}`);
+        const redTeams = isRed ? [teamNumber, match.partner] : [match.opp1, match.opp2];
+        const blueTeams = isRed ? [match.opp1, match.opp2] : [teamNumber, match.partner];
+        const resultClass = match.result === "Win"
+          ? "result-win"
+          : (match.result === "Loss" ? "result-loss" : "result-tie");
+        const outcomeClass = match.result === "Win"
+          ? "outcome-win"
+          : (match.result === "Loss" ? "outcome-loss" : "outcome-tie");
+        const outcomeLabel = match.result === "Win"
+          ? "WIN"
+          : (match.result === "Loss" ? "LOSS" : "TIE");
+        const outcomeBannerClass = match.result === "Win"
+          ? "outcome-banner-win"
+          : (match.result === "Loss" ? "outcome-banner-loss" : "outcome-banner-tie");
+        const outcomeVerb = match.result === "Win"
+          ? "WON"
+          : (match.result === "Loss" ? "LOST" : "TIED");
+        const selectedAllianceOutcomeLabel = `TEAM ${teamNumber} ${outcomeVerb}`;
+        const redOutcomeBanner = isRed
+          ? `<div class="alliance-outcome-banner ${outcomeBannerClass}">${escapeHtml(selectedAllianceOutcomeLabel)}</div>`
+          : "<div class=\"alliance-outcome-banner outcome-banner-empty\" aria-hidden=\"true\">&nbsp;</div>";
+        const blueOutcomeBanner = isRed
+          ? "<div class=\"alliance-outcome-banner outcome-banner-empty\" aria-hidden=\"true\">&nbsp;</div>"
+          : `<div class="alliance-outcome-banner ${outcomeBannerClass}">${escapeHtml(selectedAllianceOutcomeLabel)}</div>`;
+        const redScoreClass = match.winnerAlliance === "Red"
+          ? "score-win"
+          : (match.winnerAlliance === "Blue" ? "score-loss" : (match.winnerAlliance === "Tie" ? "score-tie" : "score-unknown"));
+        const blueScoreClass = match.winnerAlliance === "Blue"
+          ? "score-win"
+          : (match.winnerAlliance === "Red" ? "score-loss" : (match.winnerAlliance === "Tie" ? "score-tie" : "score-unknown"));
+        const redPanelOutcomeClass = match.winnerAlliance === "Red"
+          ? "panel-win"
+          : (match.winnerAlliance === "Blue" ? "panel-loss" : "panel-tie");
+        const bluePanelOutcomeClass = match.winnerAlliance === "Blue"
+          ? "panel-win"
+          : (match.winnerAlliance === "Red" ? "panel-loss" : "panel-tie");
+
+        const redFoul = parseFloatMaybe(match.blueBreakdown.foulCommitted);
+        const blueFoul = parseFloatMaybe(match.redBreakdown.foulCommitted);
+        const redNonPenalty = (typeof match.redScore === "number" && redFoul !== null)
+          ? match.redScore - redFoul : null;
+        const blueNonPenalty = (typeof match.blueScore === "number" && blueFoul !== null)
+          ? match.blueScore - blueFoul : null;
+        const redNpHtml = redNonPenalty !== null
+          ? ` <span class="alliance-score-np">(${escapeHtml(redNonPenalty)})</span>` : "";
+        const blueNpHtml = blueNonPenalty !== null
+          ? ` <span class="alliance-score-np">(${escapeHtml(blueNonPenalty)})</span>` : "";
+
+        return `
+          <article class="match-card ${outcomeClass}">
+            <header class="match-card-header">
+              <div class="match-header-text">
+                <div class="match-title">${escapeHtml(matchDisplayTitle)}</div>
+              </div>
+              <div class="match-scoreline ${resultClass}">${escapeHtml(outcomeLabel)}</div>
+            </header>
+            <div class="alliances-grid">
+              <section class="alliance-panel red-alliance ${redPanelOutcomeClass}">
+                <div class="alliance-panel-top">
+                  <div class="alliance-name">Red Alliance</div>
+                  ${redOutcomeBanner}
+                </div>
+                <div class="alliance-score ${redScoreClass}">${escapeHtml(match.redScore)}${redNpHtml}</div>
+                <div class="alliance-teams">
+                  ${redTeams.map((team) => {
+                    const selectedClass = String(team) === String(teamNumber) ? " selected-team" : "";
+                    return `<span class="team-pill-wrap"><span class="team-pill${selectedClass}">${escapeHtml(team)}</span>${renderTeamTagsHtml(team)}</span>`;
+                  }).join("")}
+                </div>
+              </section>
+              <section class="alliance-panel blue-alliance ${bluePanelOutcomeClass}">
+                <div class="alliance-panel-top">
+                  <div class="alliance-name">Blue Alliance</div>
+                  ${blueOutcomeBanner}
+                </div>
+                <div class="alliance-score ${blueScoreClass}">${escapeHtml(match.blueScore)}${blueNpHtml}</div>
+                <div class="alliance-teams">
+                  ${blueTeams.map((team) => {
+                    const selectedClass = String(team) === String(teamNumber) ? " selected-team" : "";
+                    return `<span class="team-pill-wrap"><span class="team-pill${selectedClass}">${escapeHtml(team)}</span>${renderTeamTagsHtml(team)}</span>`;
+                  }).join("")}
+                </div>
+              </section>
+            </div>
+            <details class="breakdown-details">
+              <summary class="breakdown-summary">Score Breakdown</summary>
+              <table class="breakdown-table">
+                <thead>
+                  <tr>
+                    <th class="breakdown-category-head">Categories</th>
+                    <th class="breakdown-red-head">Red Alliance · ${escapeHtml(match.redScore)}</th>
+                    <th class="breakdown-blue-head">Blue Alliance · ${escapeHtml(match.blueScore)}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${renderBreakdownRows()}
+                </tbody>
+              </table>
+            </details>
+          </article>
+        `;
+      }).join("");
+
+      return `
+        <div class="match-count">${matches.length} matches found.</div>
+        <div class="match-card-list">
+          ${cardsHtml}
+        </div>
+      `;
+    }
+
+    async function showTeamMatches(teamNumber) {
+      try {
+        openModal(`Team ${teamNumber} Match History`, "<p>Loading match history...</p>");
+        const rows = await ensureMatchRowsLoaded();
+        const matches = teamMatchesFromRows(teamNumber, rows);
+        openModal(`Team ${teamNumber} Match History (${currentEventCode})`, teamMatchesTableHtml(teamNumber, matches));
+      } catch (error) {
+        openModal(`Team ${teamNumber} Match History`, `<p>${escapeHtml(error.message)}</p>`);
+      }
+    }
+
+    function parseAllianceTeams(row, prefix) {
+      const teams = [];
+      for (const slot of ["1", "2"]) {
+        const value = parseFloatMaybe(row[`${prefix}${slot} Team Number`]);
+        if (value !== null) {
+          teams.push(Math.trunc(value));
+        }
+      }
+      return teams;
+    }
+
+    function buildEquations(matchRows) {
+      const equations = [];
+
+      for (const row of matchRows) {
+        const redTeams = parseAllianceTeams(row, "Red");
+        const blueTeams = parseAllianceTeams(row, "Blue");
+
+        const redFinal = firstNumber(row, ["Red Final Score"]);
+        const blueFinal = firstNumber(row, ["Blue Final Score"]);
+
+        const redAuto = firstNumber(row, ["Red Auto Score"]);
+        const blueAuto = firstNumber(row, ["Blue Auto Score"]);
+
+        const redTeleopTotal = firstNumber(row, ["Red Teleop Score"]);
+        const blueTeleopTotal = firstNumber(row, ["Blue Teleop Score"]);
+
+        const redEndgame = firstNumber(row, ["Red Endgame Score"]);
+        const blueEndgame = firstNumber(row, ["Blue Endgame Score"]);
+
+        const redFoulScored = firstNumber(row, ["Red Foul Score"]);
+        const blueFoulScored = firstNumber(row, ["Blue Foul Score"]);
+        const redFoulCommitted = firstNumber(row, ["Red Foul Committed"]);
+        const blueFoulCommitted = firstNumber(row, ["Blue Foul Committed"]);
+
+        let redNoPenalty = null;
+        let blueNoPenalty = null;
+
+        if (redFinal !== null) {
+          if (redFoulScored !== null) {
+            redNoPenalty = redFinal - redFoulScored;
+          } else if (blueFoulCommitted !== null) {
+            redNoPenalty = redFinal - blueFoulCommitted;
+          }
+        }
+
+        if (blueFinal !== null) {
+          if (blueFoulScored !== null) {
+            blueNoPenalty = blueFinal - blueFoulScored;
+          } else if (redFoulCommitted !== null) {
+            blueNoPenalty = blueFinal - redFoulCommitted;
+          }
+        }
+
+        const redTeleopOnly = (redTeleopTotal !== null && redEndgame !== null)
+          ? redTeleopTotal - redEndgame
+          : null;
+        const blueTeleopOnly = (blueTeleopTotal !== null && blueEndgame !== null)
+          ? blueTeleopTotal - blueEndgame
+          : null;
+
+        if (redTeams.length) {
+          equations.push({
+            teams: redTeams,
+            scores: {
+              opr_total: redFinal,
+              opr_no_penalty: redNoPenalty,
+              opr_auto: redAuto,
+              opr_teleop: redTeleopOnly,
+              opr_endgame: redEndgame,
+            },
+          });
+        }
+
+        if (blueTeams.length) {
+          equations.push({
+            teams: blueTeams,
+            scores: {
+              opr_total: blueFinal,
+              opr_no_penalty: blueNoPenalty,
+              opr_auto: blueAuto,
+              opr_teleop: blueTeleopOnly,
+              opr_endgame: blueEndgame,
+            },
+          });
+        }
+      }
+
+      return equations;
+    }
+
+    function buildMatrix(metricEquations, teamNumbers, teamIndex) {
+      const M = metricEquations.map((eq) => {
+        const row = new Array(teamNumbers.length).fill(0);
+        eq.teams.forEach((team) => {
+          row[teamIndex.get(team)] = 1;
+        });
+        return row;
+      });
+      const s = metricEquations.map((eq) => eq.score);
+      return { M, s };
+    }
+
+    function transpose(A) {
+      return A[0].map((_, c) => A.map((row) => row[c]));
+    }
+
+    function multiply(A, B) {
+      const rows = A.length;
+      const cols = B[0].length;
+      const mid = B.length;
+      const out = Array.from({ length: rows }, () => new Array(cols).fill(0));
+
+      for (let r = 0; r < rows; r += 1) {
+        for (let k = 0; k < mid; k += 1) {
+          const a = A[r][k];
+          if (a === 0) {
+            continue;
+          }
+          for (let c = 0; c < cols; c += 1) {
+            out[r][c] += a * B[k][c];
+          }
+        }
+      }
+      return out;
+    }
+
+    function multiplyMatVec(A, v) {
+      return A.map((row) => row.reduce((sum, value, idx) => sum + value * v[idx], 0));
+    }
+
+    function solveLinearSystem(A, b) {
+      const n = A.length;
+      const mat = A.map((row) => row.slice());
+      const vec = b.slice();
+
+      for (let i = 0; i < n; i += 1) {
+        let pivotRow = i;
+        for (let r = i + 1; r < n; r += 1) {
+          if (Math.abs(mat[r][i]) > Math.abs(mat[pivotRow][i])) {
+            pivotRow = r;
+          }
+        }
+
+        if (Math.abs(mat[pivotRow][i]) < 1e-10) {
+          return null;
+        }
+
+        [mat[i], mat[pivotRow]] = [mat[pivotRow], mat[i]];
+        [vec[i], vec[pivotRow]] = [vec[pivotRow], vec[i]];
+
+        const pivot = mat[i][i];
+        for (let c = i; c < n; c += 1) {
+          mat[i][c] /= pivot;
+        }
+        vec[i] /= pivot;
+
+        for (let r = 0; r < n; r += 1) {
+          if (r === i) {
+            continue;
+          }
+          const factor = mat[r][i];
+          for (let c = i; c < n; c += 1) {
+            mat[r][c] -= factor * mat[i][c];
+          }
+          vec[r] -= factor * vec[i];
+        }
+      }
+
+      return vec;
+    }
+
+    function leastSquares(M, s) {
+      if (!M.length || !M[0].length) {
+        return [];
+      }
+      const Mt = transpose(M);
+      const MtM = multiply(Mt, M);
+      const Mts = multiplyMatVec(Mt, s);
+      return solveLinearSystem(MtM, Mts);
+    }
+
+    function computeOprRowsFromMatchCsv(matchCsvText) {
+      const { headers, rows } = parseCsv(matchCsvText);
+      const matchRows = rowsToObjects(headers, rows);
+      const equations = buildEquations(matchRows);
+      if (!equations.length) {
+        throw new Error("No valid alliance rows were found in match CSV.");
+      }
+
+      const teamNumbers = [...new Set(equations.flatMap((eq) => eq.teams))].sort((a, b) => a - b);
+      const teamIndex = new Map(teamNumbers.map((team, idx) => [team, idx]));
+
+      const metricKeys = ["opr_total", "opr_no_penalty", "opr_auto", "opr_teleop", "opr_endgame"];
+      const metricVectors = {};
+
+      metricKeys.forEach((key) => {
+        const metricEquations = equations
+          .filter((eq) => eq.scores[key] !== null)
+          .map((eq) => ({ teams: eq.teams, score: eq.scores[key] }));
+
+        const values = new Array(teamNumbers.length).fill(NaN);
+        if (metricEquations.length) {
+          const { M, s } = buildMatrix(metricEquations, teamNumbers, teamIndex);
+          const solved = leastSquares(M, s);
+          if (!solved) {
+            throw new Error(`Unable to solve least-squares system for ${key}.`);
+          }
+          solved.forEach((value, idx) => {
+            values[idx] = value;
+          });
+        }
+        metricVectors[key] = values;
+      });
+
+      const rowsOut = teamNumbers.map((team, idx) => ({
+        teamNumber: team,
+        opr: metricVectors.opr_total[idx],
+        noPenalty: metricVectors.opr_no_penalty[idx],
+        auto: metricVectors.opr_auto[idx],
+        teleop: metricVectors.opr_teleop[idx],
+        endgame: metricVectors.opr_endgame[idx],
+      }));
+
+      rowsOut.sort((a, b) => b.opr - a.opr);
+
+      return rowsOut.map((row, idx) => [
+        String(idx + 1),
+        String(row.teamNumber),
+        row.opr.toFixed(4),
+        row.noPenalty.toFixed(4),
+        row.auto.toFixed(4),
+        row.teleop.toFixed(4),
+        row.endgame.toFixed(4),
+      ]);
+    }
+
+    function toCsvText(headers, rows) {
+      const lines = [headers.join(",")];
+      rows.forEach((row) => {
+        lines.push(row.join(","));
+      });
+      return `${lines.join("\n")}\n`;
+    }
+
+    function downloadCsv(fileName, csvText) {
+      const blob = new Blob([csvText], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+
+    function sortRows(rows, columnIndex, direction) {
+      const sorted = rows.slice();
+      sorted.sort((leftRow, rightRow) => {
+        const leftValue = leftRow[columnIndex] ?? "";
+        const rightValue = rightRow[columnIndex] ?? "";
+
+        const leftNumber = parseFloatMaybe(leftValue);
+        const rightNumber = parseFloatMaybe(rightValue);
+
+        let comparison = 0;
+        if (leftNumber !== null && rightNumber !== null) {
+          comparison = leftNumber - rightNumber;
+        } else {
+          comparison = String(leftValue).localeCompare(String(rightValue), undefined, {
+            numeric: true,
+            sensitivity: "base",
+          });
+        }
+
+        return direction === "asc" ? comparison : -comparison;
+      });
+      return sorted;
+    }
+
+    function updateSortIndicator(th, isActive, direction) {
+      if (!isActive) {
+        th.classList.remove("sorted-asc", "sorted-desc");
+        return;
+      }
+      th.classList.toggle("sorted-asc", direction === "asc");
+      th.classList.toggle("sorted-desc", direction === "desc");
+    }
+
+    function renderTable(headers, rows) {
+      currentHeaders = headers.slice();
+      currentRows = rows.slice();
+
+      const safeColumnIndex = Math.min(currentSort.columnIndex, headers.length - 1);
+      currentSort.columnIndex = Math.max(0, safeColumnIndex);
+      const sortedRows = sortRows(currentRows, currentSort.columnIndex, currentSort.direction);
+      const showDynamicRanking = currentSort.columnIndex !== 0;
+
+      thead.innerHTML = "";
+      tbody.innerHTML = "";
+
+      const headRow = document.createElement("tr");
+      headers.forEach((header, columnIndex) => {
+        const th = document.createElement("th");
+        th.textContent = header;
+        th.classList.add("sortable");
+        th.tabIndex = 0;
+        updateSortIndicator(
+          th,
+          columnIndex === currentSort.columnIndex,
+          currentSort.direction
+        );
+        const handleSort = () => {
+          if (currentSort.columnIndex === columnIndex) {
+            currentSort.direction = currentSort.direction === "asc" ? "desc" : "asc";
+          } else {
+            currentSort.columnIndex = columnIndex;
+            currentSort.direction = "desc";
+          }
+          renderTable(currentHeaders, currentRows);
+        };
+        th.addEventListener("click", handleSort);
+        th.addEventListener("keydown", (event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            handleSort();
+          }
+        });
+        headRow.appendChild(th);
+
+        if (columnIndex === 0 && showDynamicRanking) {
+          const rankingTh = document.createElement("th");
+          rankingTh.textContent = "Ranking";
+          rankingTh.classList.add("ranking-column");
+          headRow.appendChild(rankingTh);
+        }
+
+        if (header === "Team Number") {
+          const tagsTh = document.createElement("th");
+          tagsTh.textContent = "Tags";
+          headRow.appendChild(tagsTh);
+        }
+      });
+      thead.appendChild(headRow);
+
+      const teamNumberColIndex = headers.indexOf("Team Number");
+
+      sortedRows.forEach((row, rowIndex) => {
+        const tr = document.createElement("tr");
+        let teamNumberValue = "";
+        row.forEach((cell, cellIndex) => {
+          const td = document.createElement("td");
+          const header = headers[cellIndex] || "";
+          if (header === "Team Number") {
+            teamNumberValue = cell;
+            const teamButton = document.createElement("button");
+            teamButton.type = "button";
+            teamButton.className = "team-link";
+            teamButton.textContent = cell;
+            teamButton.addEventListener("click", () => {
+              showTeamMatches(cell);
+            });
+            td.appendChild(teamButton);
+          } else {
+            td.textContent = cell;
+          }
+          tr.appendChild(td);
+
+          if (cellIndex === 0 && showDynamicRanking) {
+            const rankingTd = document.createElement("td");
+            const dynamicRank = currentSort.direction === "desc"
+              ? rowIndex + 1
+              : sortedRows.length - rowIndex;
+            rankingTd.textContent = String(dynamicRank);
+            rankingTd.classList.add("ranking-column");
+            tr.appendChild(rankingTd);
+          }
+
+          if (header === "Team Number") {
+            tr.appendChild(renderTagsCell(teamNumberValue));
+          }
+        });
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderPreviewTable(payload) {
+      const teams = Array.isArray(payload && payload.teams) ? payload.teams : [];
+      const headers = [
+        "Rank",
+        "Team Number",
+        "Team Name",
+        "Highest OPR (Total)",
+        "Best Season",
+        "2025 Season OPR",
+        "2024 Season OPR",
+        "2023 Season OPR",
+        "Rookie Year",
+      ];
+
+      const formatOpr = (value) => {
+        if (value === null || value === undefined || Number.isNaN(value)) return "-";
+        return Number(value).toFixed(2);
+      };
+
+      const rows = teams.map((team, index) => {
+        const per = team && team.perSeason ? team.perSeason : {};
+        const tot2025 = per["2025"] ? per["2025"].tot : null;
+        const tot2024 = per["2024"] ? per["2024"].tot : null;
+        const tot2023 = per["2023"] ? per["2023"].tot : null;
+        return [
+          String(index + 1),
+          team && team.teamNumber !== undefined && team.teamNumber !== null
+            ? String(team.teamNumber)
+            : "-",
+          team && team.teamName ? team.teamName : "-",
+          formatOpr(team ? team.highestOpr : null),
+          team && team.highestOprSeason ? String(team.highestOprSeason) : "-",
+          formatOpr(tot2025),
+          formatOpr(tot2024),
+          formatOpr(tot2023),
+          team && team.rookieYear ? String(team.rookieYear) : "-",
+        ];
+      });
+
+      // Default sort: Highest OPR descending (column index 3).
+      currentSort.columnIndex = 3;
+      currentSort.direction = "desc";
+      renderTable(headers, rows);
+    }
+
+    async function loadEvent(eventCode) {
+      const safeEvent = eventCode.trim().toUpperCase();
+      const csvPath = `events_teams_opr/${encodeURIComponent(safeEvent)}%20OPR.csv`;
+
+      if (!safeEvent) {
+        thead.innerHTML = "";
+        tbody.innerHTML = "";
+        setMetricSummary("final", "-", "Load an event to view summary details.");
+        setMetricSummary("nonPenalty", "-", "Load an event to view summary details.");
+        setMetricSummary("auto", "-", "Load an event to view summary details.");
+        setMetricSummary("teleop", "-", "Load an event to view summary details.");
+        setStatus("Event code is required.", "error");
+        return;
+      }
+
+      setStatus(`Refreshing ${safeEvent} data and regenerating CSV files...`);
+      setSummaryLoading();
+      try {
+        currentEventCode = safeEvent;
+        currentEventMatchRows = [];
+        const generateResponse = await fetch("/api/generate-opr", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ eventCode: safeEvent }),
+        });
+
+        if (!generateResponse.ok) {
+          let message = `Unable to refresh event data for ${safeEvent}.`;
+          try {
+            const errJson = await generateResponse.json();
+            if (errJson && errJson.error) {
+              message = errJson.error;
+            }
+          } catch (_err) {
+            // Keep default error message.
+          }
+          throw new Error(message);
+        }
+
+        let generatePayload = null;
+        try {
+          generatePayload = await generateResponse.clone().json();
+        } catch (_err) {
+          generatePayload = null;
+        }
+
+        if (generatePayload && generatePayload.mode === "preview") {
+          renderPreviewTable(generatePayload);
+          setMetricSummary("final", "-", "Event has not started — no match scores yet.");
+          setMetricSummary("nonPenalty", "-", "Event has not started — no match scores yet.");
+          setMetricSummary("auto", "-", "Event has not started — no match scores yet.");
+          setMetricSummary("teleop", "-", "Event has not started — no match scores yet.");
+          const teamCount = (generatePayload.teams || []).length;
+          setStatus(
+            `${safeEvent} hasn't started yet. Showing highest historical OPR for ${teamCount} registered team${teamCount === 1 ? "" : "s"} (source: ftcscout.org).`,
+            "ok"
+          );
+          return;
+        }
+
+        const response = await fetch(csvPath, { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error(`Refreshed OPR CSV could not be loaded for ${safeEvent}.`);
+        }
+
+        const text = await response.text();
+        const { headers, rows } = parseCsv(text);
+
+        if (!headers.length || !rows.length) {
+          throw new Error(`Refreshed OPR CSV for ${safeEvent} is empty.`);
+        }
+
+        await refreshEventSummary();
+        renderTable(headers, rows);
+        setStatus(
+          `Refreshed match-details and OPR CSV files for ${safeEvent}; loaded ${rows.length} teams.`,
+          "ok"
+        );
+      } catch (error) {
+        thead.innerHTML = "";
+        tbody.innerHTML = "";
+        setStatus(error.message, "error");
+      }
+    }
+
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      loadEvent(input.value);
+    });
+
+    modalCloseButton.addEventListener("click", closeModal);
+    modal.addEventListener("click", (event) => {
+      if (event.target === modal) {
+        closeModal();
+      }
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !modal.classList.contains("hidden")) {
+        closeModal();
+      }
+    });
+  </script>
+</body>
+</html>
