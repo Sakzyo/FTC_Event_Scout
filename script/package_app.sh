@@ -13,6 +13,8 @@ DIST_DIR="$ROOT_DIR/dist"
 APP_NAME="FTC Event Scout"
 EXECUTABLE_NAME="FTCEventScout"
 BUNDLE_ID="org.ftceventscout.app"
+APP_VERSION="${FTC_SCOUT_APP_VERSION:-1.0.0}"
+APP_BUILD="${FTC_SCOUT_APP_BUILD:-1}"
 SIGNING_IDENTITY="${FTC_SCOUT_CODESIGN_IDENTITY:--}"
 APP_BUNDLE="$DIST_DIR/$APP_NAME.app"
 APP_CONTENTS="$APP_BUNDLE/Contents"
@@ -114,9 +116,9 @@ cat >"$APP_CONTENTS/Info.plist" <<PLIST
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>1.0</string>
+  <string>$APP_VERSION</string>
   <key>CFBundleVersion</key>
-  <string>1</string>
+  <string>$APP_BUILD</string>
   <key>LSApplicationCategoryType</key>
   <string>public.app-category.utilities</string>
   <key>LSMinimumSystemVersion</key>

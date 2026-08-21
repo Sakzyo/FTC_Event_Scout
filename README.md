@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="#installation"><img src="https://img.shields.io/badge/Build_for_macOS-14%2B-0A84FF?style=for-the-badge&logo=apple&logoColor=white" alt="Build FTC Event Scout for macOS 14 or later"></a>
+  <a href="https://github.com/Sakzyo/FTC_Event_Scout/releases/latest/download/FTC-Event-Scout-1.0.0.dmg"><img src="https://img.shields.io/badge/Download-v1.0.0-0A84FF?style=for-the-badge&logo=apple&logoColor=white" alt="Download FTC Event Scout 1.0.0 for macOS"></a>
 </p>
 
 <p align="center">
@@ -27,14 +27,12 @@ The visible application is entirely native SwiftUI, while the Python helper uses
 
 ### Installation
 
-A prebuilt release is not currently published, so installation is from source.
+1. Use macOS 14 or later and make sure Python 3 is installed.
+2. Download the [latest release](https://github.com/Sakzyo/FTC_Event_Scout/releases/latest/download/FTC-Event-Scout-1.0.0.dmg).
+3. Open the downloaded DMG and drag **FTC Event Scout** into **Applications**.
+4. Launch the app and enter your FIRST Events API username and token.
 
-1. Use macOS 14 or later and install Xcode 15.3 or later plus Python 3.
-2. Clone the repository using the commands in [Development](#development).
-3. Run `./script/package_app.sh release` to create `dist/FTC Event Scout.app`.
-4. Move the app to `Applications`, launch it, and enter your FIRST Events API username and token.
-
-By default, the locally built app is ad-hoc signed; it is not Developer ID signed or notarized.
+Version 1.0.0 is ad-hoc signed and not notarized. If macOS blocks the first launch, open **System Settings → Privacy & Security** and choose **Open Anyway**.
 
 ### Development
 
