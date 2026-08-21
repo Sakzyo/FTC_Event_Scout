@@ -19,5 +19,10 @@ let package = Package(
                 .linkedFramework("Security"),
             ]
         ),
+        .testTarget(
+            name: "FTCEventScoutTests",
+            dependencies: ["FTCEventScout"],
+            path: "tests/FTCEventScoutTests"
+        ),
     ]
 )

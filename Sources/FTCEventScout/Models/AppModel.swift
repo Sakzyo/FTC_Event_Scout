@@ -18,6 +18,13 @@ final class AppModel {
     var username: String
     var token: String
     var eventCode: String
+    var selectedSeason: Int {
+        didSet {
+            guard selectedSeason != oldValue else { return }
+            preferences.selectedSeason = selectedSeason
+            handleSeasonChange()
+        }
+    }
     var settingsMessage: String?
     var sortField: RankingSortField {
         didSet {
@@ -48,19 +55,41 @@ final class AppModel {
     @ObservationIgnored private let backendService = BackendService()
     @ObservationIgnored private let eventService = EventService()
     @ObservationIgnored private let tagStore = TagStore()
+    @ObservationIgnored private let credentialStore: APICredentialStore
     @ObservationIgnored private let preferences: PreferencesService
+    @ObservationIgnored private var persistedToken: String
     @ObservationIgnored private var loadTask: Task<Void, Never>?
     @ObservationIgnored private var loadGeneration = 0
 
     init() {
         let preferences = PreferencesService()
+        let credentialStore = APICredentialStore()
         self.preferences = preferences
-        username = (try? KeychainStore.value(for: .username)) ?? ""
-        token = (try? KeychainStore.value(for: .token)) ?? ""
+        self.credentialStore = credentialStore
+        let storedToken = try? credentialStore.loadToken()
+        let legacyToken = storedToken == nil
+            ? try? LegacyKeychainStore.value(for: .token)
+            : nil
+        let initialToken = storedToken ?? legacyToken ?? ""
+        let preferredUsername = preferences.firstAPIUsername
+        let initialUsername = preferredUsername.isEmpty
+            ? (try? LegacyKeychainStore.value(for: .username)) ?? ""
+            : preferredUsername
+        username = initialUsername
+        token = initialToken
+        persistedToken = initialToken
         eventCode = preferences.rememberLastEvent ? preferences.lastEventCode : ""
+        selectedSeason = preferences.selectedSeason
         sortField = preferences.rankingSortField
         sortDirection = preferences.sortDirection
         rememberLastEvent = preferences.rememberLastEvent
+
+        if preferredUsername.isEmpty && !initialUsername.isEmpty {
+            preferences.firstAPIUsername = initialUsername
+        }
+        if storedToken == nil, let legacyToken, !legacyToken.isEmpty {
+            try? credentialStore.saveToken(legacyToken)
+        }
 
         do {
             storedTagGroups = try tagStore.load()
@@ -82,6 +111,14 @@ final class AppModel {
         currentEvent?.mode == .preview
             ? RankingSortField.previewFields
             : RankingSortField.liveFields
+    }
+
+    var availableSeasons: [FTCSeason] {
+        FTCSeason.supported
+    }
+
+    var selectedSeasonOption: FTCSeason {
+        FTCSeason.option(for: selectedSeason)
     }
 
     func startIfNeeded() {
@@ -115,11 +152,16 @@ final class AppModel {
         loadTask?.cancel()
         loadGeneration += 1
         let generation = loadGeneration
+        let season = selectedSeason
 
         loadTask = Task { [weak self] in
             guard let self else { return }
             do {
-                let data = try await eventService.load(eventCode: normalized, context: context)
+                let data = try await eventService.load(
+                    eventCode: normalized,
+                    season: season,
+                    context: context
+                )
                 guard !Task.isCancelled, generation == loadGeneration else { return }
                 currentEvent = data
                 eventCode = data.eventCode
@@ -158,8 +200,11 @@ final class AppModel {
         do {
             username = normalizedUsername
             token = normalizedToken
-            try KeychainStore.set(username, for: .username)
-            try KeychainStore.set(token, for: .token)
+            if token != persistedToken {
+                try credentialStore.saveToken(token)
+                persistedToken = token
+            }
+            preferences.firstAPIUsername = username
             settingsMessage = "Credentials saved. Starting the local data service…"
             startBackend()
         } catch {
@@ -290,6 +335,20 @@ final class AppModel {
                 self.settingsMessage = error.localizedDescription
             }
         }
+    }
+
+    private func handleSeasonChange() {
+        loadTask?.cancel()
+        loadGeneration += 1
+        currentEvent = nil
+        rankedStandings = []
+        eventLoadState = .empty
+
+        guard isReady,
+              !eventCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return
+        }
+        loadEvent()
     }
 
     private func recomputeRankedStandings() {

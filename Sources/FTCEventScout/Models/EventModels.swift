@@ -1,5 +1,31 @@
 import Foundation
 
+struct FTCSeason: Identifiable, Equatable, Hashable {
+    static let defaultStartYear = 2025
+    static let supported: [FTCSeason] = [
+        FTCSeason(startYear: 2026, gameName: "BIOBUZZ"),
+        FTCSeason(startYear: 2025, gameName: "DECODE"),
+        FTCSeason(startYear: 2024, gameName: "INTO THE DEEP"),
+        FTCSeason(startYear: 2023, gameName: "CENTERSTAGE"),
+        FTCSeason(startYear: 2022, gameName: "POWERPLAY"),
+        FTCSeason(startYear: 2021, gameName: "FREIGHT FRENZY"),
+        FTCSeason(startYear: 2020, gameName: "ULTIMATE GOAL"),
+        FTCSeason(startYear: 2019, gameName: "SKYSTONE"),
+    ]
+
+    let startYear: Int
+    let gameName: String
+
+    var id: Int { startYear }
+    var yearRange: String { "\(startYear)–\(startYear + 1)" }
+    var menuLabel: String { "\(yearRange) — \(gameName)" }
+
+    static func option(for startYear: Int) -> FTCSeason {
+        supported.first { $0.startYear == startYear }
+            ?? FTCSeason(startYear: defaultStartYear, gameName: "DECODE")
+    }
+}
+
 enum DashboardSection: String, CaseIterable, Identifiable {
     case rankings
     case highlights
@@ -112,23 +138,22 @@ enum AllianceColor: String, Equatable, Hashable {
 
 struct ScoreBreakdown: Equatable, Hashable {
     let autoScore: Double?
-    let autoArtifactPoints: Double?
-    let autoClassifiedArtifacts: Double?
-    let autoOverflowArtifacts: Double?
-    let autoPatternPoints: Double?
-    let autoLeavePoints: Double?
     let teleopScore: Double?
-    let teleopArtifactPoints: Double?
-    let teleopClassifiedArtifacts: Double?
-    let teleopOverflowArtifacts: Double?
-    let teleopPatternPoints: Double?
-    let teleopDepotPoints: Double?
     let endgameScore: Double?
     let foulScore: Double?
     let foulCommitted: Double?
     let majorFouls: Double?
     let minorFouls: Double?
     let finalScore: Double?
+    let details: [ScoreBreakdownDetail]
+}
+
+struct ScoreBreakdownDetail: Codable, Equatable, Hashable, Identifiable {
+    let id: String
+    let label: String
+    let value: String
+    let indent: Int
+    let emphasized: Bool
 }
 
 enum MatchOutcome: String, Equatable {
@@ -228,6 +253,7 @@ struct EventHighlight: Identifiable, Equatable {
 struct EventData: Equatable {
     let eventCode: String
     let eventName: String
+    let season: Int
     let mode: EventMode
     let standings: [TeamStanding]
     let matches: [MatchRecord]
@@ -238,6 +264,7 @@ struct EventData: Equatable {
     init(
         eventCode: String,
         eventName: String,
+        season: Int,
         mode: EventMode,
         standings: [TeamStanding],
         matches: [MatchRecord],
@@ -245,6 +272,7 @@ struct EventData: Equatable {
     ) {
         self.eventCode = eventCode
         self.eventName = eventName
+        self.season = season
         self.mode = mode
         self.standings = standings
         self.matches = matches

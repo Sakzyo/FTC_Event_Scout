@@ -7,8 +7,9 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from score_breakdown import build_score_breakdown_rows, score_totals
+
 BASE_URL = "https://ftc-api.firstinspires.org"
-SEASON = "2025"
 OUTPUT_DIR = "event_results"
 TOURNAMENT_LEVELS = ("qual", "playoff")
 
@@ -48,8 +49,8 @@ def _authorization_headers():
     return {"Authorization": f"Basic {encoded}"}
 
 
-def make_request(path, params=None):
-    url = f"{BASE_URL}/v2.0/{SEASON}/{path}"
+def make_request(path, season, params=None):
+    url = f"{BASE_URL}/v2.0/{int(season)}/{path}"
     if params:
         url = f"{url}?{urllib.parse.urlencode(params)}"
     request = urllib.request.Request(
@@ -73,18 +74,22 @@ def make_request(path, params=None):
         raise RuntimeError(f"Could not reach FIRST Events: {exc.reason}") from exc
 
 
-def load_matches(event_code):
+def load_matches(event_code, season):
     matches = []
     for tournament_level in TOURNAMENT_LEVELS:
-        response = make_request(f"matches/{event_code}", params={"tournamentLevel": tournament_level})
+        response = make_request(
+            f"matches/{event_code}",
+            season,
+            params={"tournamentLevel": tournament_level},
+        )
         matches.extend(response.get("matches", []))
     return matches
 
 
-def load_score_lookup(event_code):
+def load_score_lookup(event_code, season):
     score_lookup = {}
     for tournament_level in TOURNAMENT_LEVELS:
-        response = make_request(f"scores/{event_code}/{tournament_level}")
+        response = make_request(f"scores/{event_code}/{tournament_level}", season)
         for match_score in response.get("matchScores", []):
             key = (
                 match_score.get("matchLevel"),
@@ -98,7 +103,7 @@ def load_score_lookup(event_code):
     return score_lookup
 
 
-def flatten_match(match, score_lookup):
+def flatten_match(match, score_lookup, season):
     teams_by_station = {
         team.get("station", ""): team.get("teamNumber")
         for team in match.get("teams", [])
@@ -114,6 +119,47 @@ def flatten_match(match, score_lookup):
     red_score = alliance_scores.get("Red", {})
     blue_score = alliance_scores.get("Blue", {})
 
+    red_final = match.get("scoreRedFinal")
+    blue_final = match.get("scoreBlueFinal")
+    red_foul_score = match.get("scoreRedFoul")
+    blue_foul_score = match.get("scoreBlueFoul")
+    red_totals = score_totals(
+        season,
+        red_score,
+        match_auto=match.get("scoreRedAuto"),
+        match_final=red_final,
+        match_foul=red_foul_score,
+    )
+    blue_totals = score_totals(
+        season,
+        blue_score,
+        match_auto=match.get("scoreBlueAuto"),
+        match_final=blue_final,
+        match_foul=blue_foul_score,
+    )
+
+    if red_totals["teleop"] is None and red_final is not None and red_totals["auto"] is not None:
+        red_totals["teleop"] = red_final - red_totals["auto"] - (red_foul_score or 0)
+    if blue_totals["teleop"] is None and blue_final is not None and blue_totals["auto"] is not None:
+        blue_totals["teleop"] = blue_final - blue_totals["auto"] - (blue_foul_score or 0)
+
+    red_breakdown = build_score_breakdown_rows(
+        season,
+        red_score,
+        blue_score,
+        match_auto=match.get("scoreRedAuto"),
+        match_final=red_final,
+        match_foul=red_foul_score,
+    )
+    blue_breakdown = build_score_breakdown_rows(
+        season,
+        blue_score,
+        red_score,
+        match_auto=match.get("scoreBlueAuto"),
+        match_final=blue_final,
+        match_foul=blue_foul_score,
+    )
+
     return {
         "Series": match.get("series"),
         "Match Number": match.get("matchNumber"),
@@ -121,55 +167,59 @@ def flatten_match(match, score_lookup):
         "Red2 Team Number": teams_by_station.get("Red2"),
         "Blue1 Team Number": teams_by_station.get("Blue1"),
         "Blue2 Team Number": teams_by_station.get("Blue2"),
-        "Red Auto Score": red_score.get("autoPoints", match.get("scoreRedAuto")),
+        "Red Auto Score": red_totals["auto"],
         "Red Auto Artifact Points": red_score.get("autoArtifactPoints"),
         "Red Auto Classified Artifacts": red_score.get("autoClassifiedArtifacts"),
         "Red Auto Overflow Artifacts": red_score.get("autoOverflowArtifacts"),
         "Red Auto Pattern Points": red_score.get("autoPatternPoints"),
         "Red Auto Leave Points": red_score.get("autoLeavePoints"),
-        "Red Teleop Score": red_score.get("teleopPoints"),
+        "Red Teleop Score": red_totals["teleop"],
         "Red Teleop Artifact Points": red_score.get("teleopArtifactPoints"),
         "Red Teleop Classified Artifacts": red_score.get("teleopClassifiedArtifacts"),
         "Red Teleop Overflow Artifacts": red_score.get("teleopOverflowArtifacts"),
         "Red Teleop Pattern Points": red_score.get("teleopPatternPoints"),
         "Red Teleop Depot Points": red_score.get("teleopDepotPoints"),
-        "Red Endgame Score": red_score.get("teleopBasePoints"),
-        "Red Foul Committed": red_score.get("foulPointsCommitted", match.get("scoreRedFoul")),
-        "Red Major Fouls": red_score.get("majorFouls"),
-        "Red Minor Fouls": red_score.get("minorFouls"),
-        "Red Final Score": match.get("scoreRedFinal"),
-        "Blue Auto Score": blue_score.get("autoPoints", match.get("scoreBlueAuto")),
+        "Red Endgame Score": red_totals["endgame"],
+        "Red Foul Score": red_foul_score,
+        "Red Foul Committed": red_totals["foul_committed"],
+        "Red Major Fouls": red_totals["major_fouls"],
+        "Red Minor Fouls": red_totals["minor_fouls"],
+        "Red Final Score": red_final,
+        "Red Score Breakdown": json.dumps(red_breakdown, ensure_ascii=False, separators=(",", ":")),
+        "Blue Auto Score": blue_totals["auto"],
         "Blue Auto Artifact Points": blue_score.get("autoArtifactPoints"),
         "Blue Auto Classified Artifacts": blue_score.get("autoClassifiedArtifacts"),
         "Blue Auto Overflow Artifacts": blue_score.get("autoOverflowArtifacts"),
         "Blue Auto Pattern Points": blue_score.get("autoPatternPoints"),
         "Blue Auto Leave Points": blue_score.get("autoLeavePoints"),
-        "Blue Teleop Score": blue_score.get("teleopPoints"),
+        "Blue Teleop Score": blue_totals["teleop"],
         "Blue Teleop Artifact Points": blue_score.get("teleopArtifactPoints"),
         "Blue Teleop Classified Artifacts": blue_score.get("teleopClassifiedArtifacts"),
         "Blue Teleop Overflow Artifacts": blue_score.get("teleopOverflowArtifacts"),
         "Blue Teleop Pattern Points": blue_score.get("teleopPatternPoints"),
         "Blue Teleop Depot Points": blue_score.get("teleopDepotPoints"),
-        "Blue Endgame Score": blue_score.get("teleopBasePoints"),
-        "Blue Foul Committed": blue_score.get("foulPointsCommitted", match.get("scoreBlueFoul")),
-        "Blue Major Fouls": blue_score.get("majorFouls"),
-        "Blue Minor Fouls": blue_score.get("minorFouls"),
-        "Blue Final Score": match.get("scoreBlueFinal"),
+        "Blue Endgame Score": blue_totals["endgame"],
+        "Blue Foul Score": blue_foul_score,
+        "Blue Foul Committed": blue_totals["foul_committed"],
+        "Blue Major Fouls": blue_totals["major_fouls"],
+        "Blue Minor Fouls": blue_totals["minor_fouls"],
+        "Blue Final Score": blue_final,
+        "Blue Score Breakdown": json.dumps(blue_breakdown, ensure_ascii=False, separators=(",", ":")),
     }
 
 
-def generate_event_match_details_csv(event_code, output_dir=OUTPUT_DIR):
+def generate_event_match_details_csv(event_code, season, output_dir=OUTPUT_DIR):
     safe_event = event_code.strip().upper()
     if not safe_event:
         raise RuntimeError("Event code is required.")
 
-    matches = load_matches(safe_event)
-    score_lookup = load_score_lookup(safe_event)
+    matches = load_matches(safe_event, season)
+    score_lookup = load_score_lookup(safe_event, season)
 
     if not matches:
         raise RuntimeError(f"No matches found for event code {safe_event}.")
 
-    rows = [flatten_match(match, score_lookup) for match in matches]
+    rows = [flatten_match(match, score_lookup, season) for match in matches]
 
     rows.sort(
         key=lambda row: (
@@ -179,8 +229,9 @@ def generate_event_match_details_csv(event_code, output_dir=OUTPUT_DIR):
         )
     )
 
-    os.makedirs(output_dir, exist_ok=True)
-    filename = os.path.join(output_dir, f"{safe_event} Match Details.csv")
+    season_output_dir = os.path.join(output_dir, str(int(season)))
+    os.makedirs(season_output_dir, exist_ok=True)
+    filename = os.path.join(season_output_dir, f"{safe_event} Match Details.csv")
 
     with open(filename, mode='w', newline='', encoding='utf-8-sig') as file:
         writer = csv.DictWriter(file, fieldnames=list(rows[0].keys()))
@@ -192,6 +243,7 @@ def generate_event_match_details_csv(event_code, output_dir=OUTPUT_DIR):
 
 if __name__ == "__main__":
     event = input("Enter the event code: ").upper()
-    output_file = generate_event_match_details_csv(event)
+    selected_season = int(input("Enter the season start year [2025]: ") or "2025")
+    output_file = generate_event_match_details_csv(event, selected_season)
     print(f"\nSaving match data to {output_file}...")
     print("Done!\n")

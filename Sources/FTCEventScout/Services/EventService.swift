@@ -1,13 +1,16 @@
 import Foundation
 
 struct EventService {
-    func load(eventCode: String, context: BackendContext) async throws -> EventData {
+    func load(eventCode: String, season: Int, context: BackendContext) async throws -> EventData {
         let endpoint = context.baseURL.appendingPathComponent("api/generate-opr")
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.timeoutInterval = 90
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(GenerateRequest(eventCode: eventCode))
+        request.httpBody = try JSONEncoder().encode(GenerateRequest(
+            eventCode: eventCode,
+            season: season
+        ))
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -21,12 +24,21 @@ struct EventService {
 
         let payload = try JSONDecoder().decode(GenerateResponse.self, from: data)
         if payload.mode == "preview" {
-            return previewData(eventCode: eventCode, payload: payload)
+            return previewData(eventCode: eventCode, season: season, payload: payload)
         }
-        return try liveData(eventCode: eventCode, payload: payload, context: context)
+        return try liveData(
+            eventCode: eventCode,
+            season: season,
+            payload: payload,
+            context: context
+        )
     }
 
-    private func previewData(eventCode: String, payload: GenerateResponse) -> EventData {
+    private func previewData(
+        eventCode: String,
+        season: Int,
+        payload: GenerateResponse
+    ) -> EventData {
         let previewTeams = payload.teams ?? []
         let standings = previewTeams.enumerated().compactMap { index, team -> TeamStanding? in
             guard let teamNumber = team.teamNumber else { return nil }
@@ -51,6 +63,7 @@ struct EventService {
         return EventData(
             eventCode: payload.eventCode ?? eventCode,
             eventName: payload.eventName ?? "",
+            season: payload.season ?? season,
             mode: .preview,
             standings: standings,
             matches: [],
@@ -60,19 +73,23 @@ struct EventService {
 
     private func liveData(
         eventCode: String,
+        season: Int,
         payload: GenerateResponse,
         context: BackendContext
     ) throws -> EventData {
         let safeCode = payload.eventCode ?? eventCode
+        let safeSeason = payload.season ?? season
         let rankingsURL = context.dataDirectory
             .appendingPathComponent("events_teams_opr", isDirectory: true)
+            .appendingPathComponent(String(safeSeason), isDirectory: true)
             .appendingPathComponent("\(safeCode) OPR.csv")
         let matchesURL = context.dataDirectory
             .appendingPathComponent("event_results", isDirectory: true)
+            .appendingPathComponent(String(safeSeason), isDirectory: true)
             .appendingPathComponent("\(safeCode) Match Details.csv")
 
         let standings = try parseStandings(at: rankingsURL)
-        let matches = try parseMatches(at: matchesURL)
+        let matches = try parseMatches(at: matchesURL, season: safeSeason)
         guard !standings.isEmpty else {
             throw EventServiceError.emptyRankings(safeCode)
         }
@@ -80,6 +97,7 @@ struct EventService {
         return EventData(
             eventCode: safeCode,
             eventName: payload.eventName ?? "",
+            season: safeSeason,
             mode: .live,
             standings: standings,
             matches: matches,
@@ -108,7 +126,7 @@ struct EventService {
         }
     }
 
-    private func parseMatches(at url: URL) throws -> [MatchRecord] {
+    private func parseMatches(at url: URL, season: Int) throws -> [MatchRecord] {
         let rows = try CSVParser.rows(from: Data(contentsOf: url))
         return rows.enumerated().map { index, row in
             let series = number(row, keys: ["Series"])
@@ -128,8 +146,8 @@ struct EventService {
                 matchNumber: matchNumber,
                 redTeams: redTeams,
                 blueTeams: blueTeams,
-                redScore: scoreBreakdown(row, prefix: "Red"),
-                blueScore: scoreBreakdown(row, prefix: "Blue")
+                redScore: scoreBreakdown(row, prefix: "Red", season: season),
+                blueScore: scoreBreakdown(row, prefix: "Blue", season: season)
             )
         }
         .sorted { lhs, rhs in
@@ -143,30 +161,82 @@ struct EventService {
         [1, 2].compactMap { integer(row, keys: ["\(prefix)\($0) Team Number"]) }
     }
 
-    private func scoreBreakdown(_ row: [String: String], prefix: String) -> ScoreBreakdown {
+    private func scoreBreakdown(
+        _ row: [String: String],
+        prefix: String,
+        season: Int
+    ) -> ScoreBreakdown {
         func value(_ name: String) -> Double? {
             number(row, keys: ["\(prefix) \(name)"])
         }
+
+        let autoScore = value("Auto Score")
+        let teleopScore = value("Teleop Score")
+        let endgameScore = value("Endgame Score")
+        let foulScore = value("Foul Score")
+        let finalScore = value("Final Score")
+        let details = decodedBreakdownDetails(row, prefix: prefix)
         return ScoreBreakdown(
-            autoScore: value("Auto Score"),
-            autoArtifactPoints: value("Auto Artifact Points"),
-            autoClassifiedArtifacts: value("Auto Classified Artifacts"),
-            autoOverflowArtifacts: value("Auto Overflow Artifacts"),
-            autoPatternPoints: value("Auto Pattern Points"),
-            autoLeavePoints: value("Auto Leave Points"),
-            teleopScore: value("Teleop Score"),
-            teleopArtifactPoints: value("Teleop Artifact Points"),
-            teleopClassifiedArtifacts: value("Teleop Classified Artifacts"),
-            teleopOverflowArtifacts: value("Teleop Overflow Artifacts"),
-            teleopPatternPoints: value("Teleop Pattern Points"),
-            teleopDepotPoints: value("Teleop Depot Points"),
-            endgameScore: value("Endgame Score"),
-            foulScore: value("Foul Score"),
+            autoScore: autoScore,
+            teleopScore: teleopScore,
+            endgameScore: endgameScore,
+            foulScore: foulScore,
             foulCommitted: value("Foul Committed"),
             majorFouls: value("Major Fouls"),
             minorFouls: value("Minor Fouls"),
-            finalScore: value("Final Score")
+            finalScore: finalScore,
+            details: details.isEmpty
+                ? genericBreakdownDetails(
+                    season: season,
+                    autoScore: autoScore,
+                    teleopScore: teleopScore,
+                    endgameScore: endgameScore,
+                    foulScore: foulScore,
+                    finalScore: finalScore
+                )
+                : details
         )
+    }
+
+    private func decodedBreakdownDetails(
+        _ row: [String: String],
+        prefix: String
+    ) -> [ScoreBreakdownDetail] {
+        let raw = row["\(prefix) Score Breakdown"] ?? ""
+        guard let data = raw.data(using: .utf8), !data.isEmpty else { return [] }
+        return (try? JSONDecoder().decode([ScoreBreakdownDetail].self, from: data)) ?? []
+    }
+
+    private func genericBreakdownDetails(
+        season: Int,
+        autoScore: Double?,
+        teleopScore: Double?,
+        endgameScore: Double?,
+        foulScore: Double?,
+        finalScore: Double?
+    ) -> [ScoreBreakdownDetail] {
+        func detail(_ id: String, _ label: String, _ value: Double?) -> ScoreBreakdownDetail? {
+            guard let value else { return nil }
+            let display = value.rounded() == value
+                ? String(Int(value))
+                : value.formatted(.number.precision(.fractionLength(2)))
+            return ScoreBreakdownDetail(
+                id: id,
+                label: label,
+                value: display,
+                indent: 0,
+                emphasized: true
+            )
+        }
+
+        let teleopLabel = season <= 2023 ? "Driver Controlled" : "Teleop"
+        return [
+            detail("auto", "Autonomous", autoScore),
+            detail("teleop", teleopLabel, teleopScore),
+            detail("endgame", "End Game", endgameScore),
+            detail("penalty", "Penalty Points Awarded", foulScore),
+            detail("final", "Final Score", finalScore),
+        ].compactMap { $0 }
     }
 
     private func number(_ row: [String: String], keys: [String]) -> Double? {
@@ -184,6 +254,7 @@ struct EventService {
 
 private struct GenerateRequest: Encodable {
     let eventCode: String
+    let season: Int
 }
 
 private struct GenerateResponse: Decodable {
@@ -191,6 +262,7 @@ private struct GenerateResponse: Decodable {
     let message: String?
     let eventCode: String?
     let eventName: String?
+    let season: Int?
     let teams: [PreviewTeam]?
 }
 

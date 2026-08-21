@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">FTC Event Scout</title>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#38a0ff"/>
+      <stop offset="1" stop-color="#0066d6"/>
+    </linearGradient>
+  </defs>
+  <rect x="28" y="28" width="456" height="456" rx="108" fill="url(#background)"/>
+  <rect x="116" y="131" width="280" height="220" rx="56" fill="#fff"/>
+  <circle cx="190" cy="234" r="24" fill="#0a84ff"/>
+  <circle cx="322" cy="234" r="24" fill="#0a84ff"/>
+  <rect x="172" y="288" width="168" height="19" rx="9.5" fill="#0a84ff"/>
+  <rect x="247" y="94" width="18" height="48" rx="9" fill="#fff"/>
+  <circle cx="256" cy="87" r="18" fill="#fff"/>
+  <rect x="142" y="380" width="52" height="46" rx="8" fill="#fff"/>
+  <rect x="230" y="341" width="52" height="85" rx="8" fill="#fff"/>
+  <rect x="318" y="362" width="52" height="64" rx="8" fill="#fff"/>
+</svg>

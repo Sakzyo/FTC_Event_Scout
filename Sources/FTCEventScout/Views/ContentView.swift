@@ -10,7 +10,8 @@ struct ContentView: View {
                 model.startIfNeeded()
             }
             .toolbar {
-                ToolbarItem(placement: .automatic) {
+                ToolbarItemGroup(placement: .automatic) {
+                    SeasonToolbarMenu(model: model)
                     EventCodeToolbar(model: model)
                 }
 
@@ -43,6 +44,25 @@ struct ContentView: View {
         case .failed(let message):
             LaunchFailureView(message: message, retry: model.restartBackend)
         }
+    }
+}
+
+private struct SeasonToolbarMenu: View {
+    @Bindable var model: AppModel
+
+    var body: some View {
+        Menu {
+            Picker("FTC Season", selection: $model.selectedSeason) {
+                ForEach(model.availableSeasons) { season in
+                    Text(season.menuLabel)
+                        .tag(season.startYear)
+                }
+            }
+        } label: {
+            Label(model.selectedSeasonOption.yearRange, systemImage: "calendar")
+        }
+        .help("Choose FTC Season")
+        .accessibilityLabel("FTC season, \(model.selectedSeasonOption.yearRange)")
     }
 }
 

@@ -45,7 +45,7 @@ private struct GeneralSettingsPane: View {
             } header: {
                 Text("Storage")
             } footer: {
-                Text("Cached CSV files can be regenerated from FIRST. Team tags and Keychain credentials are not removed.")
+                Text("Cached CSV files can be regenerated from FIRST. Team tags and saved API credentials are not removed.")
             }
 
             if let message = model.settingsMessage {
@@ -81,7 +81,7 @@ private struct CredentialsSettingsPane: View {
             } header: {
                 Text("FIRST Events API")
             } footer: {
-                Text("Credentials are stored in your login Keychain and passed only to the local data service.")
+                Text("Credentials are stored in private app data on this Mac. The token file is readable only by your macOS user, and unchanged credentials are never rewritten.")
             }
 
             if let message = model.settingsMessage {

@@ -23,6 +23,7 @@ struct RankingsView: View {
                     model: model,
                     rows: model.rankedStandings,
                     eventCode: event.eventCode,
+                    season: event.season,
                     presentedSheet: $presentedSheet
                 )
             }
@@ -67,9 +68,13 @@ private struct RankingsControls: View {
             .help(model.sortDirection == .ascending ? "Sort ascending" : "Sort descending")
 
             Spacer()
-            Text("\(model.rankedStandings.count) teams")
-                .font(.callout)
-                .foregroundStyle(.secondary)
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(model.rankedStandings.count, format: .number)
+                    .font(.title3.monospacedDigit())
+                Text("teams")
+                    .font(.callout)
+            }
+            .foregroundStyle(.secondary)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -106,12 +111,14 @@ private struct LiveRankingsTable: View {
         Table(rows) {
             TableColumn("Order") { row in
                 Text(row.order.formatted())
+                    .font(.title3)
                     .monospacedDigit()
             }
             .width(min: 52, ideal: 58, max: 72)
 
             TableColumn("Rank") { row in
                 Text(row.team.storedRank.formatted())
+                    .font(.title3)
                     .monospacedDigit()
             }
             .width(min: 48, ideal: 56, max: 70)
@@ -120,6 +127,7 @@ private struct LiveRankingsTable: View {
                 Button(row.team.teamNumber.teamNumberText) {
                     presentedSheet = .matches(eventCode: eventCode, teamNumber: row.team.teamNumber)
                 }
+                .font(.title3.monospacedDigit())
                 .buttonStyle(.link)
                 .accessibilityLabel("Team \(row.team.teamNumber.teamNumberText), show match history")
             }
@@ -136,26 +144,31 @@ private struct LiveRankingsTable: View {
 
             TableColumn("OPR") { row in
                 NumericValueView(value: row.team.totalOPR, fractionDigits: 2)
+                    .font(.title3.monospacedDigit())
             }
             .width(min: 70, ideal: 86, max: 110)
 
             TableColumn("npOPR") { row in
                 NumericValueView(value: row.team.nonPenaltyOPR, fractionDigits: 2)
+                    .font(.title3.monospacedDigit())
             }
             .width(min: 70, ideal: 86, max: 110)
 
             TableColumn("Auto") { row in
                 NumericValueView(value: row.team.autoOPR, fractionDigits: 2)
+                    .font(.title3.monospacedDigit())
             }
             .width(min: 70, ideal: 86, max: 110)
 
             TableColumn("Teleop") { row in
                 NumericValueView(value: row.team.teleopOPR, fractionDigits: 2)
+                    .font(.title3.monospacedDigit())
             }
             .width(min: 70, ideal: 86, max: 110)
 
             TableColumn("Endgame") { row in
                 NumericValueView(value: row.team.endgameOPR, fractionDigits: 2)
+                    .font(.title3.monospacedDigit())
             }
             .width(min: 70, ideal: 86, max: 110)
         }
@@ -167,18 +180,21 @@ private struct PreviewRankingsTable: View {
     @Bindable var model: AppModel
     let rows: [RankedStanding]
     let eventCode: String
+    let season: Int
     @Binding var presentedSheet: RankingSheet?
 
     var body: some View {
         Table(rows) {
             TableColumn("Rank") { row in
                 Text(row.order.formatted())
+                    .font(.title3)
                     .monospacedDigit()
             }
             .width(min: 48, ideal: 56, max: 70)
 
             TableColumn("Team") { row in
                 Text(row.team.teamNumber.teamNumberText)
+                    .font(.title3)
                     .monospacedDigit()
             }
             .width(min: 72, ideal: 84, max: 100)
@@ -200,31 +216,37 @@ private struct PreviewRankingsTable: View {
 
             TableColumn("Highest OPR") { row in
                 NumericValueView(value: row.team.highestOPR, fractionDigits: 2)
+                    .font(.title3.monospacedDigit())
             }
             .width(min: 92, ideal: 110, max: 130)
 
             TableColumn("Best Season") { row in
                 OptionalIntegerValue(value: row.team.bestSeason)
+                    .font(.title3.monospacedDigit())
             }
             .width(min: 82, ideal: 96, max: 110)
 
-            TableColumn("2025") { row in
-                NumericValueView(value: row.team.perSeason["2025"]?.total, fractionDigits: 2)
+            TableColumn("\(season)") { row in
+                NumericValueView(value: row.team.perSeason[String(season)]?.total, fractionDigits: 2)
+                    .font(.title3.monospacedDigit())
             }
             .width(min: 66, ideal: 78, max: 96)
 
-            TableColumn("2024") { row in
-                NumericValueView(value: row.team.perSeason["2024"]?.total, fractionDigits: 2)
+            TableColumn("\(season - 1)") { row in
+                NumericValueView(value: row.team.perSeason[String(season - 1)]?.total, fractionDigits: 2)
+                    .font(.title3.monospacedDigit())
             }
             .width(min: 66, ideal: 78, max: 96)
 
-            TableColumn("2023") { row in
-                NumericValueView(value: row.team.perSeason["2023"]?.total, fractionDigits: 2)
+            TableColumn("\(season - 2)") { row in
+                NumericValueView(value: row.team.perSeason[String(season - 2)]?.total, fractionDigits: 2)
+                    .font(.title3.monospacedDigit())
             }
             .width(min: 66, ideal: 78, max: 96)
 
             TableColumn("Rookie Year") { row in
                 OptionalIntegerValue(value: row.team.rookieYear)
+                    .font(.title3.monospacedDigit())
             }
             .width(min: 82, ideal: 96, max: 110)
         }

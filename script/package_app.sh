@@ -13,6 +13,7 @@ DIST_DIR="$ROOT_DIR/dist"
 APP_NAME="FTC Event Scout"
 EXECUTABLE_NAME="FTCEventScout"
 BUNDLE_ID="org.ftceventscout.app"
+SIGNING_IDENTITY="${FTC_SCOUT_CODESIGN_IDENTITY:--}"
 APP_BUNDLE="$DIST_DIR/$APP_NAME.app"
 APP_CONTENTS="$APP_BUNDLE/Contents"
 APP_MACOS="$APP_CONTENTS/MacOS"
@@ -73,7 +74,7 @@ chmod +x "$APP_MACOS/$EXECUTABLE_NAME"
 
 for file in \
   web_server.py scrape.py calculate_opr_from_csv.py \
-  historical_opr.py opr_calc.py; do
+  historical_opr.py opr_calc.py score_breakdown.py; do
   cp "$ROOT_DIR/$file" "$BACKEND_RESOURCES/$file"
 done
 cp -R "$ROOT_DIR/event_results" "$BACKEND_RESOURCES/event_results"
@@ -133,5 +134,15 @@ cat >"$APP_CONTENTS/Info.plist" <<PLIST
 </plist>
 PLIST
 
-codesign --force --sign - "$APP_BUNDLE" >/dev/null
+if [[ "$SIGNING_IDENTITY" == "-" ]]; then
+  codesign --force --sign - "$APP_BUNDLE" >/dev/null
+else
+  codesign \
+    --force \
+    --options runtime \
+    --timestamp \
+    --sign "$SIGNING_IDENTITY" \
+    "$APP_BUNDLE" >/dev/null
+fi
+codesign --verify --deep --strict "$APP_BUNDLE"
 echo "Packaged $APP_BUNDLE (native SwiftUI, $CONFIGURATION)"

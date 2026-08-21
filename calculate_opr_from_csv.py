@@ -300,7 +300,16 @@ def export_single_event_opr_csv(event_result, export_dir=OPR_EXPORT_DIR):
     return output_path
 
 
-def generate_event_opr_csv(event_code, results_dir=RESULTS_DIR, export_dir=OPR_EXPORT_DIR):
+def generate_event_opr_csv(
+    event_code,
+    season=None,
+    results_dir=RESULTS_DIR,
+    export_dir=OPR_EXPORT_DIR,
+):
+    if season is not None:
+        season_directory = str(int(season))
+        results_dir = os.path.join(results_dir, season_directory)
+        export_dir = os.path.join(export_dir, season_directory)
     event_result = calculate_event_by_code(event_code, results_dir=results_dir)
     if event_result is None:
         return None

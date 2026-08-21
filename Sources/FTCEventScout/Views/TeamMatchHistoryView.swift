@@ -170,10 +170,15 @@ private struct AlliancePanelView: View {
                     NumericValueView(value: score, fractionDigits: 0)
                         .font(.title.weight(.semibold))
                         .monospacedDigit()
+                        .foregroundStyle(color.scoreColor)
                     if let nonPenaltyScore {
-                        Text("np \(nonPenaltyScore, format: .number.precision(.fractionLength(0)))")
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
+                        HStack(alignment: .firstTextBaseline, spacing: 3) {
+                            Text("np")
+                                .foregroundStyle(.secondary)
+                            Text(nonPenaltyScore, format: .number.precision(.fractionLength(0)))
+                                .foregroundStyle(color.scoreColor)
+                        }
+                        .font(.caption.monospacedDigit())
                     }
                     Spacer()
                 }
@@ -230,59 +235,191 @@ private struct ScoreBreakdownGrid: View {
             Divider()
                 .gridCellUnsizedAxes(.horizontal)
             ForEach(rows) { row in
+                if row.emphasized, row.id != rows.first?.id {
+                    Divider()
+                        .gridCellUnsizedAxes(.horizontal)
+                }
                 GridRow {
                     Text(row.label)
-                        .fontWeight(row.emphasized ? .semibold : .regular)
-                    NumericValueView(value: row.redValue, fractionDigits: 0)
-                    NumericValueView(value: row.blueValue, fractionDigits: 0)
+                        .font(row.usesBoldValue ? .title3 : .body)
+                        .fontWeight(
+                            row.usesBoldValue
+                                ? .bold
+                                : (row.emphasized ? .semibold : .regular)
+                        )
+                        .padding(.leading, CGFloat(row.indent) * 14)
+                    BreakdownValueView(
+                        value: row.redValue,
+                        alliance: .red,
+                        usesDecodePatternColors: row.usesDecodePatternColors,
+                        isBold: row.usesBoldValue
+                    )
+                    BreakdownValueView(
+                        value: row.blueValue,
+                        alliance: .blue,
+                        usesDecodePatternColors: row.usesDecodePatternColors,
+                        isBold: row.usesBoldValue
+                    )
                 }
             }
         }
-        .frame(maxWidth: 460, alignment: .leading)
+        .frame(maxWidth: 680, alignment: .leading)
     }
 }
 
-private struct BreakdownRow: Identifiable {
+private struct BreakdownValueView: View {
+    let value: String?
+    let alliance: AllianceColor
+    let usesDecodePatternColors: Bool
+    let isBold: Bool
+
+    var body: some View {
+        Group {
+            if value == nil {
+                Text("—")
+                    .foregroundStyle(.tertiary)
+            } else {
+                Text(styledValue)
+            }
+        }
+        .font(isBold ? .title : .title3)
+        .monospacedDigit()
+        .fontWeight(isBold ? .bold : .regular)
+        .lineLimit(1)
+        .minimumScaleFactor(0.75)
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .accessibilityLabel(value ?? "Unavailable")
+    }
+
+    private var styledValue: AttributedString {
+        guard let value else { return AttributedString() }
+
+        var result = AttributedString()
+        for segment in ScoreBreakdownTextStyler.segments(
+            in: value,
+            usesDecodePatternColors: usesDecodePatternColors
+        ) {
+            var fragment = AttributedString(segment.text)
+            switch segment.role {
+            case .standard:
+                break
+            case .alliance:
+                fragment.foregroundColor = alliance.scoreColor
+            case .decodeGreen:
+                fragment.foregroundColor = .green
+            case .decodePurple:
+                fragment.foregroundColor = .purple
+            case .decodeNone:
+                fragment.foregroundColor = .white
+            }
+            result.append(fragment)
+        }
+        return result
+    }
+}
+
+struct BreakdownRow: Identifiable {
     let id: String
     let label: String
-    let redValue: Double?
-    let blueValue: Double?
+    let redValue: String?
+    let blueValue: String?
+    let indent: Int
     let emphasized: Bool
 
+    var usesDecodePatternColors: Bool {
+        id == "auto-classifier" || id == "teleop-classifier"
+    }
+
+    var usesBoldValue: Bool {
+        switch id {
+        case "total-auto", "total-teleop", "penalty", "final": true
+        default: false
+        }
+    }
+
     static func rows(for match: MatchRecord) -> [BreakdownRow] {
-        let red = match.redScore
-        let blue = match.blueScore
-        var rows = [
-            BreakdownRow(id: "auto", label: "Auto", redValue: red.autoScore, blueValue: blue.autoScore, emphasized: true),
-            BreakdownRow(id: "auto-leave", label: "  Leave Points", redValue: red.autoLeavePoints, blueValue: blue.autoLeavePoints, emphasized: false),
-            BreakdownRow(id: "auto-artifacts", label: "  Artifact Points", redValue: red.autoArtifactPoints, blueValue: blue.autoArtifactPoints, emphasized: false),
-        ]
-        if red.autoClassifiedArtifacts != nil || blue.autoClassifiedArtifacts != nil {
-            rows.append(BreakdownRow(id: "auto-classified", label: "    Classified", redValue: red.autoClassifiedArtifacts, blueValue: blue.autoClassifiedArtifacts, emphasized: false))
+        let redByID = Dictionary(uniqueKeysWithValues: match.redScore.details.map { ($0.id, $0) })
+        let blueByID = Dictionary(uniqueKeysWithValues: match.blueScore.details.map { ($0.id, $0) })
+        var identifiers = match.redScore.details.map(\.id)
+        identifiers.append(contentsOf: match.blueScore.details.map(\.id).filter {
+            !redByID.keys.contains($0)
+        })
+
+        var rows: [BreakdownRow] = identifiers.compactMap { identifier in
+            let red = redByID[identifier]
+            let blue = blueByID[identifier]
+            guard let template = red ?? blue else { return nil }
+            return BreakdownRow(
+                id: identifier,
+                label: template.label,
+                redValue: displayValue(red?.value, for: identifier),
+                blueValue: displayValue(blue?.value, for: identifier),
+                indent: template.indent,
+                emphasized: template.emphasized
+            )
         }
-        if red.autoOverflowArtifacts != nil || blue.autoOverflowArtifacts != nil {
-            rows.append(BreakdownRow(id: "auto-overflow", label: "    Overflow", redValue: red.autoOverflowArtifacts, blueValue: blue.autoOverflowArtifacts, emphasized: false))
-        }
-        rows.append(contentsOf: [
-            BreakdownRow(id: "auto-pattern", label: "  Pattern", redValue: red.autoPatternPoints, blueValue: blue.autoPatternPoints, emphasized: false),
-            BreakdownRow(id: "teleop", label: "Driver Controlled", redValue: red.teleopScore, blueValue: blue.teleopScore, emphasized: true),
-            BreakdownRow(id: "endgame", label: "  Base Points", redValue: red.endgameScore, blueValue: blue.endgameScore, emphasized: false),
-            BreakdownRow(id: "teleop-artifacts", label: "  Artifact Points", redValue: red.teleopArtifactPoints, blueValue: blue.teleopArtifactPoints, emphasized: false),
-        ])
-        if red.teleopClassifiedArtifacts != nil || blue.teleopClassifiedArtifacts != nil {
-            rows.append(BreakdownRow(id: "teleop-classified", label: "    Classified", redValue: red.teleopClassifiedArtifacts, blueValue: blue.teleopClassifiedArtifacts, emphasized: false))
-        }
-        if red.teleopOverflowArtifacts != nil || blue.teleopOverflowArtifacts != nil {
-            rows.append(BreakdownRow(id: "teleop-overflow", label: "    Overflow", redValue: red.teleopOverflowArtifacts, blueValue: blue.teleopOverflowArtifacts, emphasized: false))
-        }
-        rows.append(contentsOf: [
-            BreakdownRow(id: "teleop-pattern", label: "  Pattern", redValue: red.teleopPatternPoints, blueValue: blue.teleopPatternPoints, emphasized: false),
-            BreakdownRow(id: "depot", label: "  Depot", redValue: red.teleopDepotPoints, blueValue: blue.teleopDepotPoints, emphasized: false),
-            BreakdownRow(id: "penalty", label: "Penalty Points Awarded", redValue: blue.foulCommitted, blueValue: red.foulCommitted, emphasized: true),
-            BreakdownRow(id: "major", label: "  Major Fouls", redValue: red.majorFouls, blueValue: blue.majorFouls, emphasized: false),
-            BreakdownRow(id: "minor", label: "  Minor Fouls", redValue: red.minorFouls, blueValue: blue.minorFouls, emphasized: false),
-            BreakdownRow(id: "final", label: "Final Score", redValue: red.finalScore, blueValue: blue.finalScore, emphasized: true),
-        ])
+
+        rows.removeAll { $0.id == "total-auto" || $0.id == "total-teleop" }
+
+        let totalAuto = BreakdownRow(
+            id: "total-auto",
+            label: "Total Auto Points",
+            redValue: displayScore(match.redScore.autoScore),
+            blueValue: displayScore(match.blueScore.autoScore),
+            indent: 1,
+            emphasized: false
+        )
+        let autoInsertionIndex = rows.lastIndex { $0.id.hasPrefix("auto") }
+            .map { rows.index(after: $0) } ?? rows.startIndex
+        rows.insert(totalAuto, at: autoInsertionIndex)
+
+        let totalTeleop = BreakdownRow(
+            id: "total-teleop",
+            label: "Total Teleop Points",
+            redValue: displayScore(match.redScore.teleopScore),
+            blueValue: displayScore(match.blueScore.teleopScore),
+            indent: 1,
+            emphasized: false
+        )
+        let teleopInsertionIndex = rows.firstIndex {
+            $0.id.hasPrefix("penalty") || $0.id == "final"
+        } ?? rows.endIndex
+        rows.insert(totalTeleop, at: teleopInsertionIndex)
+
         return rows
+    }
+
+    private static func displayScore(_ value: Double?) -> String? {
+        guard let value else { return nil }
+        if value.rounded() == value {
+            return String(Int(value))
+        }
+        return value.formatted(.number.precision(.fractionLength(0...2)))
+    }
+
+    private static func displayValue(_ value: String?, for identifier: String) -> String? {
+        guard let value,
+              identifier == "auto-classifier" || identifier == "teleop-classifier" else {
+            return value
+        }
+
+        let abbreviations = [
+            "green": "G",
+            "purple": "P",
+            "none": "N",
+        ]
+        return value
+            .split(separator: "/", omittingEmptySubsequences: false)
+            .map { component in
+                let state = component.trimmingCharacters(in: .whitespacesAndNewlines)
+                return abbreviations[state.lowercased()] ?? state
+            }
+            .joined(separator: " / ")
+    }
+}
+
+private extension AllianceColor {
+    var scoreColor: Color {
+        self == .red ? .red : .blue
     }
 }

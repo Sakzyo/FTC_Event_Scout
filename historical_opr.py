@@ -12,21 +12,23 @@ import urllib.error
 
 FTCSCOUT_GRAPHQL_URL = "https://api.ftcscout.org/graphql"
 DEFAULT_SEASON = 2025
-# Seasons to query for "highest OPR ever achieved". Ordered newest first so
-# that ties (extremely unlikely with floats) prefer the most recent season.
-HISTORICAL_SEASONS = [2025, 2024, 2023, 2022, 2021, 2020, 2019]
+MIN_HISTORICAL_SEASON = 2019
 
 
-def _build_quickstats_alias_block():
+def _historical_seasons_through(season):
+    return list(range(int(season), MIN_HISTORICAL_SEASON - 1, -1))
+
+
+def _build_quickstats_alias_block(historical_seasons):
     return "\n".join(
         f"            s{season}: quickStats(season: {season}) {{ "
         f"tot {{ value rank }} auto {{ value }} dc {{ value }} }}"
-        for season in HISTORICAL_SEASONS
+        for season in historical_seasons
     )
 
 
-def _build_event_query(event_code, season):
-    quickstats_block = _build_quickstats_alias_block()
+def _build_event_query(event_code, season, historical_seasons):
+    quickstats_block = _build_quickstats_alias_block(historical_seasons)
     return (
         "query {\n"
         f'  event: eventByCode(season: {int(season)}, code: "{event_code}") {{\n'
@@ -83,7 +85,7 @@ def _post_graphql(query, timeout=20):
     return payload.get("data") or {}
 
 
-def _team_summary(team_entry):
+def _team_summary(team_entry, historical_seasons):
     team = team_entry.get("team") or {}
     number = team.get("number") or team_entry.get("teamNumber")
     name = team.get("name") or ""
@@ -93,7 +95,7 @@ def _team_summary(team_entry):
     highest_value = None
     highest_season = None
     highest_rank = None
-    for season in HISTORICAL_SEASONS:
+    for season in historical_seasons:
         block = team.get(f"s{season}")
         if not block:
             continue
@@ -153,7 +155,8 @@ def fetch_event_preview(event_code, season=DEFAULT_SEASON):
     if not safe_event:
         raise ValueError("event_code is required.")
 
-    data = _post_graphql(_build_event_query(safe_event, season))
+    historical_seasons = _historical_seasons_through(season)
+    data = _post_graphql(_build_event_query(safe_event, season, historical_seasons))
     event = data.get("event")
     if not event:
         raise RuntimeError(
@@ -161,7 +164,7 @@ def fetch_event_preview(event_code, season=DEFAULT_SEASON):
         )
 
     team_entries = event.get("teams") or []
-    teams = [_team_summary(entry) for entry in team_entries]
+    teams = [_team_summary(entry, historical_seasons) for entry in team_entries]
     teams.sort(
         key=lambda t: (t["highestOpr"] is None, -(t["highestOpr"] or 0.0))
     )

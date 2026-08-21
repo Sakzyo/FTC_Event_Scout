@@ -15,6 +15,8 @@ from scrape import generate_event_match_details_csv
 
 RESOURCE_ROOT = Path(__file__).resolve().parent
 EVENT_CODE_PATTERN = re.compile(r"^[A-Z0-9]{2,24}$")
+MIN_SEASON = 2019
+MAX_SEASON = 2026
 
 
 def _looks_like_no_matches_error(exc):
@@ -38,6 +40,7 @@ class OPRAPIHandler(BaseHTTPRequestHandler):
             raw_body = self.rfile.read(content_length).decode("utf-8")
             payload = json.loads(raw_body) if raw_body else {}
             event_code = str(payload.get("eventCode", "")).strip().upper()
+            season = payload.get("season")
 
             if not event_code:
                 self._send_json(400, {"error": "eventCode is required."})
@@ -48,16 +51,26 @@ class OPRAPIHandler(BaseHTTPRequestHandler):
                     {"error": "Event codes may contain only 2–24 letters and numbers."},
                 )
                 return
+            if (
+                isinstance(season, bool)
+                or not isinstance(season, int)
+                or not MIN_SEASON <= season <= MAX_SEASON
+            ):
+                self._send_json(
+                    400,
+                    {"error": f"season must be an integer from {MIN_SEASON} through {MAX_SEASON}."},
+                )
+                return
 
             try:
-                match_details_path = generate_event_match_details_csv(event_code)
+                match_details_path = generate_event_match_details_csv(event_code, season)
             except Exception as exc:  # noqa: BLE001
                 if _looks_like_no_matches_error(exc):
                     # Event has not started yet (no matches played). Fall back
                     # to ftcscout.org for a historical-OPR preview of the
                     # registered teams.
                     try:
-                        preview = fetch_event_preview(event_code)
+                        preview = fetch_event_preview(event_code, season)
                     except Exception as preview_exc:  # noqa: BLE001
                         self._send_json(
                             500,
@@ -75,7 +88,7 @@ class OPRAPIHandler(BaseHTTPRequestHandler):
                         {
                             "mode": "preview",
                             "message": (
-                                f"{event_code} has not started yet. Showing each "
+                                f"{event_code} has no matches in the {season} season. Showing each "
                                 f"registered team's highest historical OPR from ftcscout.org."
                             ),
                             "eventCode": preview["eventCode"],
@@ -99,7 +112,7 @@ class OPRAPIHandler(BaseHTTPRequestHandler):
                 )
                 return
 
-            result = generate_event_opr_csv(event_code)
+            result = generate_event_opr_csv(event_code, season=season)
             if result is None:
                 self._send_json(
                     500,
@@ -116,6 +129,7 @@ class OPRAPIHandler(BaseHTTPRequestHandler):
                 {
                     "message": f"Generated OPR CSV for {result['event_code']}",
                     "eventCode": result["event_code"],
+                    "season": season,
                     "teamCount": result["team_count"],
                     "matchDetailsPath": match_details_path,
                     "outputPath": result["output_path"],

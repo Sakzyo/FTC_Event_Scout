@@ -1,7 +1,7 @@
 import Foundation
 import Security
 
-enum KeychainStore {
+enum LegacyKeychainStore {
     enum Key: String {
         case username = "first-api-username"
         case token = "first-api-token"
@@ -16,11 +16,14 @@ enum KeychainStore {
             kSecAttrAccount as String: key.rawValue,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,
+            kSecUseAuthenticationUI as String: kSecUseAuthenticationUISkip,
         ]
 
         var result: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
-        if status == errSecItemNotFound {
+        if status == errSecItemNotFound
+            || status == errSecInteractionNotAllowed
+            || status == errSecAuthFailed {
             return nil
         }
         guard status == errSecSuccess else {
@@ -32,33 +35,6 @@ enum KeychainStore {
         return String(data: data, encoding: .utf8)
     }
 
-    static func set(_ value: String, for key: Key) throws {
-        let lookup: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key.rawValue,
-        ]
-        let data = Data(value.utf8)
-
-        let updateStatus = SecItemUpdate(
-            lookup as CFDictionary,
-            [kSecValueData as String: data] as CFDictionary
-        )
-
-        if updateStatus == errSecItemNotFound {
-            var insert = lookup
-            insert[kSecValueData as String] = data
-            let addStatus = SecItemAdd(insert as CFDictionary, nil)
-            guard addStatus == errSecSuccess else {
-                throw KeychainError(status: addStatus)
-            }
-            return
-        }
-
-        guard updateStatus == errSecSuccess else {
-            throw KeychainError(status: updateStatus)
-        }
-    }
 }
 
 private struct KeychainError: LocalizedError {

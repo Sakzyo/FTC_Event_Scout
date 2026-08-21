@@ -45,7 +45,7 @@ private struct DashboardSidebar: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(event.eventCode)
                         .font(.headline.monospaced())
-                    Text(event.mode == .preview ? "Historical preview" : "Live event data")
+                    Text("\(FTCSeason.option(for: event.season).yearRange) · \(event.mode == .preview ? "Historical preview" : "Live event data")")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -110,7 +110,7 @@ private struct EventHeaderView: View {
                     }
                 }
                 Spacer()
-                Text(event.mode == .preview ? "PREVIEW" : "CURRENT")
+                Text("\(FTCSeason.option(for: event.season).yearRange) · \(event.mode == .preview ? "PREVIEW" : "LIVE")")
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(event.mode == .preview ? .orange : .secondary)
             }

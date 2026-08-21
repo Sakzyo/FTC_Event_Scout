@@ -50,7 +50,7 @@ struct CredentialSetupView: View {
             }
             .frame(width: 480)
 
-            Text("Your credentials are stored in your macOS login Keychain and passed only to the local data service.")
+            Text("Your credentials are stored in private app data on this Mac and passed only to the local data service. Keychain authorization is not required.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
