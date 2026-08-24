@@ -22,8 +22,8 @@ final class OPRChartSeriesTests: XCTestCase {
         XCTAssertTrue(series.allSatisfy { $0.availableTeamCount == 12 })
         XCTAssertEqual(series[0].entries.map(\.teamNumber), Array((1 ... 12).reversed()))
         XCTAssertEqual(series[0].summaryEntries.map(\.teamNumber), Array((3 ... 12).reversed()))
-        XCTAssertEqual(series[0].teamDomain, (1 ... 12).map(String.init))
-        XCTAssertEqual(series[0].summaryTeamDomain, (3 ... 12).map(String.init))
+        XCTAssertEqual(series[0].teamDomain, Array((1 ... 12).reversed()).map(String.init))
+        XCTAssertEqual(series[0].summaryTeamDomain, Array((3 ... 12).reversed()).map(String.init))
     }
 
     func testSeriesSkipUnavailableAndNonFiniteValuesAndBreakTiesByTeamNumber() {
@@ -37,6 +37,7 @@ final class OPRChartSeriesTests: XCTestCase {
         let totalSeries = OPRChartSeries.make(from: standings)[0]
 
         XCTAssertEqual(totalSeries.entries.map(\.teamNumber), [10, 30])
+        XCTAssertEqual(totalSeries.teamDomain, ["10", "30"])
         XCTAssertEqual(totalSeries.availableTeamCount, 2)
     }
 

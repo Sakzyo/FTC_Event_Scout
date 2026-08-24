@@ -216,8 +216,8 @@ struct OPRChartSeries: Identifiable, Equatable {
                 summaryEntries: summaryEntries,
                 valueDomain: valueDomain(for: rankedEntries),
                 summaryValueDomain: valueDomain(for: summaryEntries),
-                teamDomain: rankedEntries.reversed().map(\.teamLabel),
-                summaryTeamDomain: summaryEntries.reversed().map(\.teamLabel)
+                teamDomain: rankedEntries.map(\.teamLabel),
+                summaryTeamDomain: summaryEntries.map(\.teamLabel)
             )
         }
     }
