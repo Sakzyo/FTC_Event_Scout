@@ -50,6 +50,7 @@ struct RankingsView: View {
 private struct OPRChartsPanel: View {
     let mode: EventMode
     let series: [OPRChartSeries]
+    @State private var presentedSeries: OPRChartSeries?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -59,6 +60,12 @@ private struct OPRChartsPanel: View {
                 Text("Top 10 teams per metric · each chart uses its own scale")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                Label(
+                    "Click a chart to view every team",
+                    systemImage: "arrow.up.left.and.arrow.down.right"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12)
@@ -82,7 +89,10 @@ private struct OPRChartsPanel: View {
                 ScrollView {
                     LazyVStack(spacing: 12) {
                         ForEach(series) { metricSeries in
-                            OPRMetricChart(series: metricSeries)
+                            OPRMetricChartButton(
+                                series: metricSeries,
+                                presentedSeries: $presentedSeries
+                            )
                         }
                     }
                     .padding(12)
@@ -90,77 +100,180 @@ private struct OPRChartsPanel: View {
             }
         }
         .background(.background)
+        .sheet(item: $presentedSeries) { selectedSeries in
+            OPRFullChartSheet(series: selectedSeries)
+        }
     }
 }
 
-private struct OPRMetricChart: View {
+private struct OPRMetricChartButton: View {
     let series: OPRChartSeries
+    @Binding var presentedSeries: OPRChartSeries?
 
     var body: some View {
-        GroupBox {
-            if series.entries.isEmpty {
-                Text("No values available")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 72)
-            } else {
-                Chart {
-                    ForEach(series.entries) { entry in
-                        BarMark(
-                            xStart: .value("Zero baseline", 0),
-                            xEnd: .value(series.metric.accessibilityTitle, entry.value),
-                            y: .value("Team", entry.teamLabel)
-                        )
-                        .foregroundStyle(.tint)
-                        .annotation(
-                            position: entry.value >= 0 ? .trailing : .leading,
-                            spacing: 4
-                        ) {
-                            Text(entry.value, format: .number.precision(.fractionLength(1)))
-                                .font(.caption2.monospacedDigit())
-                                .foregroundStyle(.primary)
-                        }
-                    }
-
-                    RuleMark(x: .value("Zero", 0))
-                        .foregroundStyle(.secondary.opacity(0.65))
-                }
-                .chartXScale(domain: series.valueDomain)
-                .chartYScale(domain: series.teamDomain)
-                .chartXAxis {
-                    AxisMarks(position: .bottom, values: .automatic(desiredCount: 3)) {
-                        AxisGridLine()
-                        AxisTick()
-                        AxisValueLabel()
-                    }
-                }
-                .chartYAxis {
-                    AxisMarks(position: .leading) {
-                        AxisValueLabel()
-                            .font(.caption.monospacedDigit())
-                    }
-                }
-                .chartLegend(.hidden)
-                .frame(height: max(112, CGFloat(series.entries.count) * 23 + 24))
-                .accessibilityLabel("\(series.metric.accessibilityTitle) team rankings")
-                .accessibilityHint("Horizontal bars compare the highest available team values.")
-            }
+        Button {
+            presentedSeries = series
         } label: {
-            HStack(alignment: .firstTextBaseline) {
-                Text(series.metric.title)
-                    .font(.headline)
-                Spacer()
-                Text(teamCountLabel)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+            GroupBox {
+                if series.summaryEntries.isEmpty {
+                    Text("No values available")
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, minHeight: 72)
+                } else {
+                    OPRBarChart(
+                        metric: series.metric,
+                        entries: series.summaryEntries,
+                        valueDomain: series.summaryValueDomain,
+                        teamDomain: series.summaryTeamDomain,
+                        rowHeight: 23,
+                        minimumHeight: 112,
+                        desiredTickCount: 3
+                    )
+                }
+            } label: {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(series.metric.title)
+                        .font(.headline)
+                    Spacer()
+                    Text(teamCountLabel)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                }
             }
         }
+        .buttonStyle(.plain)
+        .contentShape(.rect)
+        .disabled(series.summaryEntries.isEmpty)
+        .help("Show all teams for \(series.metric.title)")
+        .accessibilityLabel("\(series.metric.accessibilityTitle) chart")
+        .accessibilityValue(teamCountLabel)
+        .accessibilityHint("Open a larger chart containing every team with an available value.")
     }
 
     private var teamCountLabel: String {
-        if series.availableTeamCount > series.entries.count {
-            return "Top \(series.entries.count) of \(series.availableTeamCount)"
+        if series.availableTeamCount > series.summaryEntries.count {
+            return "Top \(series.summaryEntries.count) of \(series.availableTeamCount)"
         }
-        return "\(series.entries.count) teams"
+        return "\(series.summaryEntries.count) teams"
+    }
+}
+
+private struct OPRFullChartSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let series: OPRChartSeries
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("\(series.metric.title) — All Teams")
+                        .font(.title2.weight(.semibold))
+                    Text("\(series.availableTeamCount) teams with available values · colors match every OPR chart")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Button("Done", action: dismiss.callAsFunction)
+                    .keyboardShortcut(.cancelAction)
+            }
+            .padding(16)
+
+            Divider()
+
+            if series.entries.isEmpty {
+                ContentUnavailableView(
+                    "No \(series.metric.title) Data",
+                    systemImage: "chart.bar.xaxis",
+                    description: Text("No teams have an available value for this metric.")
+                )
+            } else {
+                ScrollView {
+                    OPRBarChart(
+                        metric: series.metric,
+                        entries: series.entries,
+                        valueDomain: series.valueDomain,
+                        teamDomain: series.teamDomain,
+                        rowHeight: 28,
+                        minimumHeight: 420,
+                        desiredTickCount: 6
+                    )
+                    .padding(20)
+                }
+            }
+        }
+        .frame(minWidth: 720, minHeight: 560)
+    }
+}
+
+private struct OPRBarChart: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let metric: OPRChartMetric
+    let entries: [OPRChartEntry]
+    let valueDomain: ClosedRange<Double>
+    let teamDomain: [String]
+    let rowHeight: CGFloat
+    let minimumHeight: CGFloat
+    let desiredTickCount: Int
+
+    var body: some View {
+        Chart {
+            ForEach(entries) { entry in
+                BarMark(
+                    xStart: .value("Zero baseline", 0),
+                    xEnd: .value(metric.accessibilityTitle, entry.value),
+                    y: .value("Team", entry.teamLabel)
+                )
+                .foregroundStyle(teamColor(for: entry.teamNumber))
+                .annotation(
+                    position: entry.value >= 0 ? .trailing : .leading,
+                    spacing: 4
+                ) {
+                    Text(entry.value, format: .number.precision(.fractionLength(1)))
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.primary)
+                }
+                .accessibilityLabel("Team \(entry.teamLabel)")
+                .accessibilityValue(
+                    entry.value.formatted(.number.precision(.fractionLength(2)))
+                )
+            }
+
+            RuleMark(x: .value("Zero", 0))
+                .foregroundStyle(.secondary.opacity(0.65))
+        }
+        .chartXScale(domain: valueDomain)
+        .chartYScale(domain: teamDomain)
+        .chartXAxis {
+            AxisMarks(position: .bottom, values: .automatic(desiredCount: desiredTickCount)) {
+                AxisGridLine()
+                AxisTick()
+                AxisValueLabel()
+            }
+        }
+        .chartYAxis {
+            AxisMarks(position: .leading) {
+                AxisValueLabel()
+                    .font(.caption.monospacedDigit())
+            }
+        }
+        .chartLegend(.hidden)
+        .frame(height: max(minimumHeight, CGFloat(entries.count) * rowHeight + 24))
+        .accessibilityLabel("\(metric.accessibilityTitle) team rankings")
+        .accessibilityHint("Horizontal bars compare teams; each bar is also labeled by team number and value.")
+    }
+
+    private func teamColor(for teamNumber: Int) -> Color {
+        Color(
+            hue: TeamChartColorIdentity.hue(for: teamNumber),
+            saturation: colorScheme == .dark ? 0.68 : 0.78,
+            brightness: colorScheme == .dark ? 0.90 : 0.58
+        )
     }
 }
 

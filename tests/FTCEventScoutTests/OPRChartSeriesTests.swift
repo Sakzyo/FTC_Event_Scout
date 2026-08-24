@@ -17,10 +17,13 @@ final class OPRChartSeriesTests: XCTestCase {
         let series = OPRChartSeries.make(from: standings)
 
         XCTAssertEqual(series.map(\.metric), [.total, .nonPenalty, .teleop, .auto, .endgame])
-        XCTAssertTrue(series.allSatisfy { $0.entries.count == 10 })
+        XCTAssertTrue(series.allSatisfy { $0.entries.count == 12 })
+        XCTAssertTrue(series.allSatisfy { $0.summaryEntries.count == 10 })
         XCTAssertTrue(series.allSatisfy { $0.availableTeamCount == 12 })
-        XCTAssertEqual(series[0].entries.map(\.teamNumber), Array((3 ... 12).reversed()))
-        XCTAssertEqual(series[0].teamDomain, (3 ... 12).map(String.init))
+        XCTAssertEqual(series[0].entries.map(\.teamNumber), Array((1 ... 12).reversed()))
+        XCTAssertEqual(series[0].summaryEntries.map(\.teamNumber), Array((3 ... 12).reversed()))
+        XCTAssertEqual(series[0].teamDomain, (1 ... 12).map(String.init))
+        XCTAssertEqual(series[0].summaryTeamDomain, (3 ... 12).map(String.init))
     }
 
     func testSeriesSkipUnavailableAndNonFiniteValuesAndBreakTiesByTeamNumber() {
@@ -48,6 +51,16 @@ final class OPRChartSeriesTests: XCTestCase {
         XCTAssertLessThan(domain.lowerBound, -4)
         XCTAssertGreaterThan(domain.upperBound, 8)
         XCTAssertTrue(domain.contains(0))
+    }
+
+    func testTeamColorIdentityIsStableAndDistinctAcrossEventTeams() {
+        let teamNumbers = [9755, 16095, 19603, 19705, 21981, 24599, 25218, 27570]
+        let firstPass = teamNumbers.map(TeamChartColorIdentity.hue)
+        let secondPass = teamNumbers.map(TeamChartColorIdentity.hue)
+
+        XCTAssertEqual(firstPass, secondPass)
+        XCTAssertEqual(Set(firstPass).count, teamNumbers.count)
+        XCTAssertTrue(firstPass.allSatisfy { (0 ..< 1).contains($0) })
     }
 
     private func standing(

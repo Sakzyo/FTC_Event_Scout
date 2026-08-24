@@ -184,11 +184,14 @@ struct OPRChartSeries: Identifiable, Equatable {
 
     let metric: OPRChartMetric
     let entries: [OPRChartEntry]
-    let availableTeamCount: Int
+    let summaryEntries: [OPRChartEntry]
     let valueDomain: ClosedRange<Double>
+    let summaryValueDomain: ClosedRange<Double>
     let teamDomain: [String]
+    let summaryTeamDomain: [String]
 
     var id: OPRChartMetric { metric }
+    var availableTeamCount: Int { entries.count }
 
     static func make(from standings: [TeamStanding]) -> [OPRChartSeries] {
         OPRChartMetric.allCases.map { metric in
@@ -205,14 +208,16 @@ struct OPRChartSeries: Identifiable, Equatable {
                     }
                     return lhs.value > rhs.value
                 }
-            let entries = Array(rankedEntries.prefix(maximumEntryCount))
+            let summaryEntries = Array(rankedEntries.prefix(maximumEntryCount))
 
             return OPRChartSeries(
                 metric: metric,
-                entries: entries,
-                availableTeamCount: rankedEntries.count,
-                valueDomain: valueDomain(for: entries),
-                teamDomain: entries.reversed().map(\.teamLabel)
+                entries: rankedEntries,
+                summaryEntries: summaryEntries,
+                valueDomain: valueDomain(for: rankedEntries),
+                summaryValueDomain: valueDomain(for: summaryEntries),
+                teamDomain: rankedEntries.reversed().map(\.teamLabel),
+                summaryTeamDomain: summaryEntries.reversed().map(\.teamLabel)
             )
         }
     }
@@ -232,6 +237,16 @@ struct OPRChartSeries: Identifiable, Equatable {
         let paddedLowerBound = lowerBound < 0 ? lowerBound - padding : 0
         let paddedUpperBound = upperBound > 0 ? upperBound + padding : 0
         return paddedLowerBound ... paddedUpperBound
+    }
+}
+
+enum TeamChartColorIdentity {
+    private static let goldenRatioConjugate = 0.618_033_988_749_894_9
+
+    static func hue(for teamNumber: Int) -> Double {
+        let rawHue = (Double(teamNumber) * goldenRatioConjugate)
+            .truncatingRemainder(dividingBy: 1)
+        return rawHue >= 0 ? rawHue : rawHue + 1
     }
 }
 
