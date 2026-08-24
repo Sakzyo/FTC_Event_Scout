@@ -13,10 +13,56 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/app-demo.png" width="1100" alt="FTC Event Scout displaying sortable OPR rankings for a loaded event">
+  <img src="docs/assets/app-demo.png" width="1100" alt="FTC Event Scout showing a sortable event ranking table beside color-coded OPR bar charts">
 </p>
 
-**FTC Event Scout** is a native **macOS scouting app** for exploring FIRST Tech Challenge events. It combines live rankings, score highlights, team match history, detailed score breakdowns, and locally stored scouting tags in a SwiftUI interface.
+<p align="center">
+  <sub>Live rankings and color-coded OPR comparisons for every team at an event.</sub>
+</p>
+
+**FTC Event Scout** is a native **macOS scouting app** for exploring FIRST Tech Challenge events. It combines live rankings, comparative OPR charts, score highlights, team match history, detailed score breakdowns, and locally stored scouting tags in a SwiftUI interface.
+
+
+## Features
+
+- **Live event rankings.** Choose an FTC season, enter an event code, and load every registered team and scored match from FIRST Events.
+- **Sortable performance table.** Rank teams by official rank, team number, total OPR, non-penalty OPR (npOPR), Auto OPR, Teleop OPR, or Endgame OPR in either direction.
+- **Interactive OPR charts.** Compare the top 10 teams for OPR, npOPR, Teleop, Auto, and Endgame beside the rankings table. Every metric is ordered from highest at the top to lowest at the bottom.
+- **Full-event chart drill-down.** Click any compact graph to open a scrollable chart containing every team with an available value. Each team has a distinct color that remains consistent across metrics.
+- **Team match history.** Click a team number to inspect every event appearance, alliance partners, opponents, final and non-penalty scores, and the selected team's win/loss result.
+- **Detailed score breakdowns.** Expand a match to compare red and blue alliance scoring by season-specific Auto, Teleop, Endgame, and penalty categories.
+- **Event highlights.** Surface the highest final, non-penalty, Auto, and Teleop alliance scores, including ties and the teams responsible.
+- **Local scouting tags.** Add reusable, color-coded notes to teams and see them in rankings, highlights, and match history. Tags stay on the Mac.
+- **Pre-event previews.** If an event has not started, use FTCScout history to compare the registered teams' strongest prior-season OPR results.
+
+
+## Feature tour
+
+### Compare every OPR metric at a glance
+
+The Rankings view keeps the sortable team table and five compact bar charts visible together. Direct value labels make the charts readable without hovering, while stable team colors make it easier to follow the same team from OPR to npOPR, Auto, Teleop, and Endgame.
+
+Use the **Sort by** menu or a table header to change the ranking, then click any chart to move from its top-10 summary to the complete event field.
+
+### Open a complete event chart
+
+<p align="center">
+  <img src="docs/assets/opr-all-teams.png" width="720" alt="All-team npOPR chart ordered from the highest value at the top to the lowest value at the bottom">
+</p>
+
+The expanded chart includes every team with available data, exact values, negative-value handling, and the same cross-metric team colors used in the compact charts.
+
+### Follow a typical scouting workflow
+
+1. Select the season in the toolbar and enter the FIRST event code.
+2. Sort the Rankings table by the metric that matters to your scouting question.
+3. Compare the compact graphs or click one to inspect the whole-event distribution.
+4. Click a team number to open its match history, then expand **Score Breakdown** for alliance-level detail.
+5. Use the add-tag control to record traits such as `Strong Auto`, `Consistent`, or `Watch Defense`; reuse the same tag for other teams at that event.
+6. Open **Highlights** in the sidebar to find the matches and alliances behind the event's best scores.
+
+
+## How it works
 
 Choose a season and enter an event code; a loopback-only Python helper fetches FIRST Events data, generates CSVs, and calculates least-squares OPR estimates for total, non-penalty, autonomous, teleop, and endgame performance. The app turns those results into sortable tables so scouts can compare teams and inspect individual matches.
 
@@ -82,6 +128,6 @@ FTC_Event_Scout/
 ├── opr_calc.py                      standard-library least-squares solver
 ├── event_results/                   bundled seed match-detail CSVs
 ├── events_teams_opr/                bundled seed OPR CSVs
-├── tests/                            season-specific score breakdown tests
-└── docs/assets/                     README icon and application capture
+├── tests/                            Swift model/UI support tests and Python score tests
+└── docs/assets/                     README icon and current feature captures
 ```
