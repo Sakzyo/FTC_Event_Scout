@@ -1,3 +1,4 @@
+import Charts
 import SwiftUI
 
 struct RankingsView: View {
@@ -10,22 +11,29 @@ struct RankingsView: View {
             RankingsControls(model: model)
             Divider()
 
-            switch event.mode {
-            case .live:
-                LiveRankingsTable(
-                    model: model,
-                    rows: model.rankedStandings,
-                    eventCode: event.eventCode,
-                    presentedSheet: $presentedSheet
-                )
-            case .preview:
-                PreviewRankingsTable(
-                    model: model,
-                    rows: model.rankedStandings,
-                    eventCode: event.eventCode,
-                    season: event.season,
-                    presentedSheet: $presentedSheet
-                )
+            HStack(spacing: 0) {
+                switch event.mode {
+                case .live:
+                    LiveRankingsTable(
+                        model: model,
+                        rows: model.rankedStandings,
+                        eventCode: event.eventCode,
+                        presentedSheet: $presentedSheet
+                    )
+                case .preview:
+                    PreviewRankingsTable(
+                        model: model,
+                        rows: model.rankedStandings,
+                        eventCode: event.eventCode,
+                        season: event.season,
+                        presentedSheet: $presentedSheet
+                    )
+                }
+
+                Divider()
+
+                OPRChartsPanel(mode: event.mode, series: event.oprChartSeries)
+                    .frame(minWidth: 280, idealWidth: 320, maxWidth: 380)
             }
         }
         .sheet(item: $presentedSheet) { sheet in
@@ -36,6 +44,123 @@ struct RankingsView: View {
                 TagEditorView(model: model, selection: sheet.selection)
             }
         }
+    }
+}
+
+private struct OPRChartsPanel: View {
+    let mode: EventMode
+    let series: [OPRChartSeries]
+
+    var body: some View {
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Compare OPR Leaders")
+                    .font(.headline)
+                Text("Top 10 teams per metric · each chart uses its own scale")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+
+            Divider()
+
+            if mode == .preview {
+                ContentUnavailableView {
+                    Label("OPR Charts Unavailable", systemImage: "chart.bar.xaxis")
+                } description: {
+                    Text("Historical previews do not include live OPR, npOPR, teleop, auto, or endgame estimates.")
+                }
+            } else if series.allSatisfy({ $0.entries.isEmpty }) {
+                ContentUnavailableView {
+                    Label("No OPR Data", systemImage: "chart.bar.xaxis")
+                } description: {
+                    Text("OPR charts will appear when team estimates are available.")
+                }
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        ForEach(series) { metricSeries in
+                            OPRMetricChart(series: metricSeries)
+                        }
+                    }
+                    .padding(12)
+                }
+            }
+        }
+        .background(.background)
+    }
+}
+
+private struct OPRMetricChart: View {
+    let series: OPRChartSeries
+
+    var body: some View {
+        GroupBox {
+            if series.entries.isEmpty {
+                Text("No values available")
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 72)
+            } else {
+                Chart {
+                    ForEach(series.entries) { entry in
+                        BarMark(
+                            xStart: .value("Zero baseline", 0),
+                            xEnd: .value(series.metric.accessibilityTitle, entry.value),
+                            y: .value("Team", entry.teamLabel)
+                        )
+                        .foregroundStyle(.tint)
+                        .annotation(
+                            position: entry.value >= 0 ? .trailing : .leading,
+                            spacing: 4
+                        ) {
+                            Text(entry.value, format: .number.precision(.fractionLength(1)))
+                                .font(.caption2.monospacedDigit())
+                                .foregroundStyle(.primary)
+                        }
+                    }
+
+                    RuleMark(x: .value("Zero", 0))
+                        .foregroundStyle(.secondary.opacity(0.65))
+                }
+                .chartXScale(domain: series.valueDomain)
+                .chartYScale(domain: series.teamDomain)
+                .chartXAxis {
+                    AxisMarks(position: .bottom, values: .automatic(desiredCount: 3)) {
+                        AxisGridLine()
+                        AxisTick()
+                        AxisValueLabel()
+                    }
+                }
+                .chartYAxis {
+                    AxisMarks(position: .leading) {
+                        AxisValueLabel()
+                            .font(.caption.monospacedDigit())
+                    }
+                }
+                .chartLegend(.hidden)
+                .frame(height: max(112, CGFloat(series.entries.count) * 23 + 24))
+                .accessibilityLabel("\(series.metric.accessibilityTitle) team rankings")
+                .accessibilityHint("Horizontal bars compare the highest available team values.")
+            }
+        } label: {
+            HStack(alignment: .firstTextBaseline) {
+                Text(series.metric.title)
+                    .font(.headline)
+                Spacer()
+                Text(teamCountLabel)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var teamCountLabel: String {
+        if series.availableTeamCount > series.entries.count {
+            return "Top \(series.entries.count) of \(series.availableTeamCount)"
+        }
+        return "\(series.entries.count) teams"
     }
 }
 

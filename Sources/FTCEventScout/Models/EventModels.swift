@@ -131,6 +131,110 @@ struct RankedStanding: Identifiable, Equatable {
     var id: Int { team.id }
 }
 
+enum OPRChartMetric: String, CaseIterable, Identifiable {
+    case total
+    case nonPenalty
+    case teleop
+    case auto
+    case endgame
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .total: "OPR"
+        case .nonPenalty: "npOPR"
+        case .teleop: "Teleop OPR"
+        case .auto: "Auto OPR"
+        case .endgame: "Endgame OPR"
+        }
+    }
+
+    var accessibilityTitle: String {
+        switch self {
+        case .total: "Overall OPR"
+        case .nonPenalty: "Non-penalty OPR"
+        case .teleop: "Teleop OPR"
+        case .auto: "Auto OPR"
+        case .endgame: "Endgame OPR"
+        }
+    }
+
+    func value(for standing: TeamStanding) -> Double? {
+        switch self {
+        case .total: standing.totalOPR
+        case .nonPenalty: standing.nonPenaltyOPR
+        case .teleop: standing.teleopOPR
+        case .auto: standing.autoOPR
+        case .endgame: standing.endgameOPR
+        }
+    }
+}
+
+struct OPRChartEntry: Identifiable, Equatable {
+    let teamNumber: Int
+    let value: Double
+
+    var id: Int { teamNumber }
+    var teamLabel: String { teamNumber.teamNumberText }
+}
+
+struct OPRChartSeries: Identifiable, Equatable {
+    static let maximumEntryCount = 10
+
+    let metric: OPRChartMetric
+    let entries: [OPRChartEntry]
+    let availableTeamCount: Int
+    let valueDomain: ClosedRange<Double>
+    let teamDomain: [String]
+
+    var id: OPRChartMetric { metric }
+
+    static func make(from standings: [TeamStanding]) -> [OPRChartSeries] {
+        OPRChartMetric.allCases.map { metric in
+            let rankedEntries = standings
+                .compactMap { standing -> OPRChartEntry? in
+                    guard let value = metric.value(for: standing), value.isFinite else {
+                        return nil
+                    }
+                    return OPRChartEntry(teamNumber: standing.teamNumber, value: value)
+                }
+                .sorted { lhs, rhs in
+                    if lhs.value == rhs.value {
+                        return lhs.teamNumber < rhs.teamNumber
+                    }
+                    return lhs.value > rhs.value
+                }
+            let entries = Array(rankedEntries.prefix(maximumEntryCount))
+
+            return OPRChartSeries(
+                metric: metric,
+                entries: entries,
+                availableTeamCount: rankedEntries.count,
+                valueDomain: valueDomain(for: entries),
+                teamDomain: entries.reversed().map(\.teamLabel)
+            )
+        }
+    }
+
+    private static func valueDomain(for entries: [OPRChartEntry]) -> ClosedRange<Double> {
+        guard let minimum = entries.map(\.value).min(),
+              let maximum = entries.map(\.value).max() else {
+            return -1 ... 1
+        }
+
+        let lowerBound = min(0, minimum)
+        let upperBound = max(0, maximum)
+        let span = upperBound - lowerBound
+        guard span > 0 else { return -1 ... 1 }
+
+        let padding = max(span * 0.18, 0.5)
+        let paddedLowerBound = lowerBound < 0 ? lowerBound - padding : 0
+        let paddedUpperBound = upperBound > 0 ? upperBound + padding : 0
+        return paddedLowerBound ... paddedUpperBound
+    }
+}
+
 enum AllianceColor: String, Equatable, Hashable {
     case red
     case blue
@@ -256,6 +360,7 @@ struct EventData: Equatable {
     let season: Int
     let mode: EventMode
     let standings: [TeamStanding]
+    let oprChartSeries: [OPRChartSeries]
     let matches: [MatchRecord]
     let matchesByTeam: [Int: [MatchRecord]]
     let highlights: [EventHighlight]
@@ -275,6 +380,7 @@ struct EventData: Equatable {
         self.season = season
         self.mode = mode
         self.standings = standings
+        oprChartSeries = OPRChartSeries.make(from: standings)
         self.matches = matches
         var matchIndex: [Int: [MatchRecord]] = [:]
         for match in matches {
