@@ -4,7 +4,7 @@ import SwiftUI
 struct RankingsView: View {
     @Bindable var model: AppModel
     let event: EventData
-    @State private var presentedSheet: RankingSheet?
+    @State private var presentation: RankingPresentation?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -19,7 +19,7 @@ struct RankingsView: View {
                         rows: model.rankedStandings,
                         eventCode: event.eventCode,
                         teamMetrics: event.oprcAnalysis.teamMetrics,
-                        presentedSheet: $presentedSheet
+                        present: present
                     )
                 case .preview:
                     PreviewRankingsTable(
@@ -27,31 +27,41 @@ struct RankingsView: View {
                         rows: model.rankedStandings,
                         eventCode: event.eventCode,
                         season: event.season,
-                        presentedSheet: $presentedSheet
+                        present: present
                     )
                 }
 
                 Divider()
 
-                OPRChartsPanel(mode: event.mode, series: event.oprChartSeries)
+                OPRChartsPanel(
+                    mode: event.mode,
+                    series: event.oprChartSeries,
+                    showFullChart: { present(.chart($0)) }
+                )
                     .frame(minWidth: 280, idealWidth: 320, maxWidth: 380)
             }
         }
-        .sheet(item: $presentedSheet) { sheet in
-            switch sheet.kind {
-            case .matches:
-                TeamMatchHistoryView(model: model, selection: sheet.selection)
-            case .tags:
-                TagEditorView(model: model, selection: sheet.selection)
+        .sheet(item: $presentation) { presentation in
+            switch presentation {
+            case .matches(let selection):
+                TeamMatchHistoryView(model: model, selection: selection)
+            case .tags(let selection):
+                TagEditorView(model: model, selection: selection)
+            case .chart(let series):
+                OPRFullChartSheet(series: series)
             }
         }
+    }
+
+    private func present(_ newPresentation: RankingPresentation) {
+        presentation = newPresentation
     }
 }
 
 private struct OPRChartsPanel: View {
     let mode: EventMode
     let series: [OPRChartSeries]
-    @State private var presentedSeries: OPRChartSeries?
+    let showFullChart: (OPRChartSeries) -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -92,7 +102,7 @@ private struct OPRChartsPanel: View {
                         ForEach(series) { metricSeries in
                             OPRMetricChartButton(
                                 series: metricSeries,
-                                presentedSeries: $presentedSeries
+                                showFullChart: { showFullChart(metricSeries) }
                             )
                         }
                     }
@@ -101,20 +111,15 @@ private struct OPRChartsPanel: View {
             }
         }
         .background(.background)
-        .sheet(item: $presentedSeries) { selectedSeries in
-            OPRFullChartSheet(series: selectedSeries)
-        }
     }
 }
 
 private struct OPRMetricChartButton: View {
     let series: OPRChartSeries
-    @Binding var presentedSeries: OPRChartSeries?
+    let showFullChart: () -> Void
 
     var body: some View {
-        Button {
-            presentedSeries = series
-        } label: {
+        Button(action: showFullChart) {
             GroupBox {
                 if series.summaryEntries.isEmpty {
                     Text("No values available")
@@ -145,9 +150,10 @@ private struct OPRMetricChartButton: View {
                         .accessibilityHidden(true)
                 }
             }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .contentShape(.rect)
         .disabled(series.summaryEntries.isEmpty)
         .help("Show all teams for \(series.metric.title)")
         .accessibilityLabel("\(series.metric.accessibilityTitle) chart")
@@ -346,7 +352,7 @@ private struct LiveRankingsTable: View {
     let rows: [RankedStanding]
     let eventCode: String
     let teamMetrics: [Int: TeamOPRcMetric]
-    @Binding var presentedSheet: RankingSheet?
+    let present: (RankingPresentation) -> Void
 
     var body: some View {
         Table(rows) {
@@ -365,11 +371,17 @@ private struct LiveRankingsTable: View {
             .width(min: 48, ideal: 56, max: 70)
 
             TableColumn("Team") { row in
-                Button(row.team.teamNumber.teamNumberText) {
-                    presentedSheet = .matches(eventCode: eventCode, teamNumber: row.team.teamNumber)
+                Button {
+                    present(.matches(eventCode: eventCode, teamNumber: row.team.teamNumber))
+                } label: {
+                    Text(row.team.teamNumber.teamNumberText)
+                        .font(.title3.monospacedDigit())
+                        .foregroundStyle(.tint)
+                        .frame(maxWidth: .infinity, minHeight: 22, alignment: .leading)
+                        .contentShape(Rectangle())
                 }
-                .font(.title3.monospacedDigit())
-                .buttonStyle(.link)
+                .buttonStyle(.borderless)
+                .help("Show match history for Team \(row.team.teamNumber.teamNumberText)")
                 .accessibilityLabel("Team \(row.team.teamNumber.teamNumberText), show match history")
             }
             .width(min: 72, ideal: 84, max: 100)
@@ -378,7 +390,7 @@ private struct LiveRankingsTable: View {
                 TeamTagsTableCell(
                     tags: model.tags(eventCode: eventCode, teamNumber: row.team.teamNumber)
                 ) {
-                    presentedSheet = .tags(eventCode: eventCode, teamNumber: row.team.teamNumber)
+                    present(.tags(eventCode: eventCode, teamNumber: row.team.teamNumber))
                 }
             }
             .width(min: 90, ideal: 130, max: 190)
@@ -432,7 +444,7 @@ private struct PreviewRankingsTable: View {
     let rows: [RankedStanding]
     let eventCode: String
     let season: Int
-    @Binding var presentedSheet: RankingSheet?
+    let present: (RankingPresentation) -> Void
 
     var body: some View {
         Table(rows) {
@@ -460,7 +472,7 @@ private struct PreviewRankingsTable: View {
                 TeamTagsTableCell(
                     tags: model.tags(eventCode: eventCode, teamNumber: row.team.teamNumber)
                 ) {
-                    presentedSheet = .tags(eventCode: eventCode, teamNumber: row.team.teamNumber)
+                    present(.tags(eventCode: eventCode, teamNumber: row.team.teamNumber))
                 }
             }
             .width(min: 90, ideal: 130, max: 190)
@@ -525,39 +537,46 @@ private struct TeamTagsTableCell: View {
     let edit: () -> Void
 
     var body: some View {
-        HStack(spacing: 5) {
-            TeamTagsSummaryView(tags: tags)
-            Button(action: edit) {
+        Button(action: edit) {
+            HStack(spacing: 5) {
+                TeamTagsSummaryView(tags: tags)
+                Spacer(minLength: 4)
                 Image(systemName: "plus.circle")
-                    .accessibilityLabel(tags.isEmpty ? "Add team tag" : "Edit team tags")
             }
-            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity, minHeight: 22, alignment: .leading)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.borderless)
+        .help(tags.isEmpty ? "Add a team tag" : "Edit team tags")
+        .accessibilityLabel(tags.isEmpty ? "Add team tag" : "Edit team tags")
     }
 }
 
-private struct RankingSheet: Identifiable {
-    enum Kind {
-        case matches
-        case tags
+enum RankingPresentation: Identifiable, Equatable {
+    case matches(TeamSelection)
+    case tags(TeamSelection)
+    case chart(OPRChartSeries)
+
+    var id: String {
+        switch self {
+        case .matches(let selection):
+            return "matches:\(selection.id)"
+        case .tags(let selection):
+            return "tags:\(selection.id)"
+        case .chart(let series):
+            return "chart:\(series.metric.rawValue)"
+        }
     }
 
-    let kind: Kind
-    let selection: TeamSelection
-
-    var id: String { "\(kind)-\(selection.id)" }
-
-    static func matches(eventCode: String, teamNumber: Int) -> RankingSheet {
-        RankingSheet(
-            kind: .matches,
-            selection: TeamSelection(eventCode: eventCode, teamNumber: teamNumber)
+    static func matches(eventCode: String, teamNumber: Int) -> RankingPresentation {
+        .matches(
+            TeamSelection(eventCode: eventCode, teamNumber: teamNumber)
         )
     }
 
-    static func tags(eventCode: String, teamNumber: Int) -> RankingSheet {
-        RankingSheet(
-            kind: .tags,
-            selection: TeamSelection(eventCode: eventCode, teamNumber: teamNumber)
+    static func tags(eventCode: String, teamNumber: Int) -> RankingPresentation {
+        .tags(
+            TeamSelection(eventCode: eventCode, teamNumber: teamNumber)
         )
     }
 }
