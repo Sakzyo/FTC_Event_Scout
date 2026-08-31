@@ -14,9 +14,14 @@ struct SettingsView: View {
                 .tabItem {
                     Label("FIRST API", systemImage: "key")
                 }
+
+            UpdatesSettingsPane()
+                .tabItem {
+                    Label("Updates", systemImage: "arrow.triangle.2.circlepath")
+                }
         }
         .scenePadding()
-        .frame(width: 520, height: 330)
+        .frame(width: 520, height: 350)
     }
 }
 
@@ -64,6 +69,99 @@ private struct GeneralSettingsPane: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("The app will restart its local data service. Event data can be downloaded again.")
+        }
+    }
+}
+
+private struct UpdatesSettingsPane: View {
+    @State private var updater = AppUpdateController()
+
+    var body: some View {
+        Form {
+            Section {
+                LabeledContent("Installed version") {
+                    Text(updater.currentVersionText)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+
+                if let release = updater.latestRelease {
+                    LabeledContent("Latest version") {
+                        Text(release.version.description)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    }
+                }
+            } header: {
+                Text("Version")
+            }
+
+            Section {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    if updater.isWorking {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Image(systemName: statusSymbol)
+                            .foregroundStyle(statusColor)
+                    }
+
+                    Text(updater.statusMessage)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                }
+
+                HStack {
+                    Link("View Releases", destination: releasePageURL)
+
+                    Spacer()
+
+                    Button(updater.buttonTitle) {
+                        Task {
+                            await updater.performUpdate()
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(updater.isWorking)
+                }
+            } header: {
+                Text("Software Update")
+            } footer: {
+                Text("Updates are downloaded from the official GitHub release, verified with SHA-256, and opened with the macOS installer.")
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private var releasePageURL: URL {
+        updater.latestRelease?.releasePageURL ?? AppUpdateService.releasesPageURL
+    }
+
+    private var statusSymbol: String {
+        switch updater.state {
+        case .upToDate:
+            return "checkmark.circle.fill"
+        case .installerOpened:
+            return "arrow.down.circle.fill"
+        case .failed:
+            return "exclamationmark.triangle.fill"
+        case .idle, .checking, .downloading:
+            return "info.circle"
+        }
+    }
+
+    private var statusColor: Color {
+        switch updater.state {
+        case .upToDate:
+            return .green
+        case .installerOpened:
+            return .accentColor
+        case .failed:
+            return .orange
+        case .idle, .checking, .downloading:
+            return .secondary
         }
     }
 }

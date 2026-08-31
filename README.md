@@ -35,6 +35,7 @@
 - **Event highlights.** Surface the highest final, non-penalty, Auto, and Teleop alliance scores, including ties and the teams responsible.
 - **Local scouting tags.** Add reusable, color-coded notes to teams and see them in rankings, highlights, and match history. Tags stay on the Mac.
 - **Pre-event previews.** If an event has not started, use FTCScout history to compare the registered teams' strongest prior-season OPR results.
+- **Verified in-app updates.** Open **Settings → Updates** to check for the newest GitHub release, verify its SHA-256 digest, and open the downloaded macOS installer.
 
 
 ## Feature tour
@@ -102,6 +103,8 @@ OPR and OPRc are scouting estimates, not official FTC rankings. Their additive m
 2. Download the [latest release](https://github.com/Sakzyo/FTC_Event_Scout/releases/latest/download/FTC-Event-Scout-1.0.0.dmg).
 3. Open the downloaded DMG and drag **FTC Event Scout** into **Applications**.
 4. Launch the app and enter your FIRST Events API username and token.
+
+After installation, choose **FTC Event Scout → Settings → Updates → Check for Updates** to download and open the latest verified installer without searching for the release manually.
 
 Version 1.0.0 is ad-hoc signed and not notarized. If macOS blocks the first launch, open **System Settings → Privacy & Security** and choose **Open Anyway**.
 
