@@ -173,6 +173,53 @@ final class MatchPredictionServiceTests: XCTestCase {
         XCTAssertEqual(prediction.predictedWinner, .red)
     }
 
+    func testManualFourTeamEntryGeneratesTheSamePrediction() throws {
+        let entry = try ManualMatchEntry.parse(
+            redTeamNumbers: [" 1 ", "2"],
+            blueTeamNumbers: ["3", "4"]
+        )
+
+        let prediction = MatchPredictionService.predict(
+            matchID: "custom-match",
+            displayTitle: "Custom Match",
+            series: nil,
+            matchNumber: nil,
+            redTeams: entry.redTeams,
+            blueTeams: entry.blueTeams,
+            teamMetrics: metrics([1: 50, 2: 40, 3: 45, 4: 35])
+        )
+
+        XCTAssertEqual(entry.redTeams, [1, 2])
+        XCTAssertEqual(entry.blueTeams, [3, 4])
+        XCTAssertEqual(prediction.predictedRedScore, 90)
+        XCTAssertEqual(prediction.predictedBlueScore, 80)
+        XCTAssertEqual(prediction.predictedWinner, .red)
+        XCTAssertEqual(prediction.predictedMargin, 10)
+    }
+
+    func testManualFourTeamEntryRejectsMissingInvalidAndDuplicateTeams() {
+        assertManualEntryError(
+            .incomplete,
+            red: ["1", ""],
+            blue: ["3", "4"]
+        )
+        assertManualEntryError(
+            .invalidTeamNumber,
+            red: ["1", "abc"],
+            blue: ["3", "4"]
+        )
+        assertManualEntryError(
+            .invalidTeamNumber,
+            red: ["1", "0"],
+            blue: ["3", "4"]
+        )
+        assertManualEntryError(
+            .duplicateTeamNumber,
+            red: ["1", "2"],
+            blue: ["1", "4"]
+        )
+    }
+
     func testUnknownTeamMakesPredictionUnavailableWithoutUsingZero() {
         let prediction = MatchPredictionService.predict(
             matchID: "missing",
@@ -258,6 +305,30 @@ final class MatchPredictionServiceTests: XCTestCase {
             teamNumbers: teams,
             score: score
         )
+    }
+
+    private func assertManualEntryError(
+        _ expected: ManualMatchEntryError,
+        red: [String],
+        blue: [String],
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        XCTAssertThrowsError(
+            try ManualMatchEntry.parse(
+                redTeamNumbers: red,
+                blueTeamNumbers: blue
+            ),
+            file: file,
+            line: line
+        ) { error in
+            XCTAssertEqual(
+                error as? ManualMatchEntryError,
+                expected,
+                file: file,
+                line: line
+            )
+        }
     }
 
     private func normalRoundRobinMatches(repetitions: Int) -> [MatchRecord] {

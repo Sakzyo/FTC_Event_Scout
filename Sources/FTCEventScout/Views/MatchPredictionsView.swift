@@ -10,27 +10,224 @@ struct MatchPredictionsView: View {
             } description: {
                 Text("This historical preview has no current match schedule or completed scores for calculating OPRc.")
             }
-        } else if event.oprcAnalysis.predictions.isEmpty {
-            ContentUnavailableView {
-                Label("No Upcoming Matches", systemImage: "checkmark.circle")
-            } description: {
-                Text("No unplayed matches are present in the current event schedule.")
-            }
         } else {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 14) {
                     PredictionMethodSummary(analysis: event.oprcAnalysis)
+                    ManualMatchPredictionSection(analysis: event.oprcAnalysis)
 
-                    ForEach(event.oprcAnalysis.predictions) { prediction in
-                        MatchPredictionCard(
-                            prediction: prediction,
-                            teamMetrics: event.oprcAnalysis.teamMetrics,
-                            analysis: event.oprcAnalysis
-                        )
+                    Text("Upcoming Matches")
+                        .font(.title2.weight(.semibold))
+                        .padding(.top, 4)
+
+                    if event.oprcAnalysis.predictions.isEmpty {
+                        NoUpcomingMatchesView()
+                    } else {
+                        ForEach(event.oprcAnalysis.predictions) { prediction in
+                            MatchPredictionCard(
+                                prediction: prediction,
+                                teamMetrics: event.oprcAnalysis.teamMetrics,
+                                analysis: event.oprcAnalysis
+                            )
+                        }
                     }
                 }
                 .padding(16)
             }
+        }
+    }
+}
+
+private struct ManualMatchPredictionSection: View {
+    let analysis: OPRcAnalysis
+    @State private var redOne = ""
+    @State private var redTwo = ""
+    @State private var blueOne = ""
+    @State private var blueTwo = ""
+    @State private var submittedEntry: ManualMatchEntry?
+    @State private var validationMessage: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            GroupBox {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Enter two teams for each alliance to predict a custom matchup using the current event's OPRc values.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+
+                    HStack(alignment: .top, spacing: 12) {
+                        ManualAllianceInput(
+                            alliance: .red,
+                            firstTeam: $redOne,
+                            secondTeam: $redTwo,
+                            submit: generatePrediction
+                        )
+
+                        Text("VS")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 38)
+                            .accessibilityHidden(true)
+
+                        ManualAllianceInput(
+                            alliance: .blue,
+                            firstTeam: $blueOne,
+                            secondTeam: $blueTwo,
+                            submit: generatePrediction
+                        )
+                    }
+
+                    HStack {
+                        if let validationMessage {
+                            Label(validationMessage, systemImage: "exclamationmark.triangle.fill")
+                                .font(.callout)
+                                .foregroundStyle(.red)
+                        }
+
+                        Spacer(minLength: 12)
+
+                        Button("Clear", action: clear)
+                            .disabled(inputValues.allSatisfy(\.isEmpty))
+
+                        Button(action: generatePrediction) {
+                            Label("Predict Match", systemImage: "sparkles")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .keyboardShortcut(.defaultAction)
+                    }
+                }
+                .padding(5)
+            } label: {
+                Label("Custom Match Prediction", systemImage: "square.and.pencil")
+            }
+
+            if let prediction = manualPrediction {
+                MatchPredictionCard(
+                    prediction: prediction,
+                    teamMetrics: analysis.teamMetrics,
+                    analysis: analysis
+                )
+            }
+        }
+        .onChange(of: inputValues) { _, _ in
+            submittedEntry = nil
+            validationMessage = nil
+        }
+    }
+
+    private var inputValues: [String] {
+        [redOne, redTwo, blueOne, blueTwo]
+    }
+
+    private var manualPrediction: MatchPrediction? {
+        guard let submittedEntry else { return nil }
+        return MatchPredictionService.predict(
+            matchID: "custom-match",
+            displayTitle: "Custom Match",
+            series: nil,
+            matchNumber: nil,
+            redTeams: submittedEntry.redTeams,
+            blueTeams: submittedEntry.blueTeams,
+            teamMetrics: analysis.teamMetrics,
+            filteringWasApplied: analysis.filteringWasApplied,
+            calculationIsRankDeficient: analysis.filteredIsRankDeficient
+        )
+    }
+
+    private func generatePrediction() {
+        do {
+            submittedEntry = try ManualMatchEntry.parse(
+                redTeamNumbers: [redOne, redTwo],
+                blueTeamNumbers: [blueOne, blueTwo]
+            )
+            validationMessage = nil
+        } catch {
+            submittedEntry = nil
+            validationMessage = error.localizedDescription
+        }
+    }
+
+    private func clear() {
+        redOne = ""
+        redTwo = ""
+        blueOne = ""
+        blueTwo = ""
+        submittedEntry = nil
+        validationMessage = nil
+    }
+}
+
+private struct ManualAllianceInput: View {
+    let alliance: AllianceColor
+    @Binding var firstTeam: String
+    @Binding var secondTeam: String
+    let submit: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Label(
+                alliance == .red ? "Red Alliance" : "Blue Alliance",
+                systemImage: "circle.fill"
+            )
+            .font(.headline)
+            .foregroundStyle(alliance == .red ? .red : .blue)
+
+            Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 8) {
+                GridRow {
+                    Text("Team 1")
+                    teamNumberField(
+                        accessibilityLabel: "\(allianceName) alliance first team number",
+                        text: $firstTeam
+                    )
+                }
+                GridRow {
+                    Text("Team 2")
+                    teamNumberField(
+                        accessibilityLabel: "\(allianceName) alliance second team number",
+                        text: $secondTeam
+                    )
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: 9))
+    }
+
+    private var allianceName: String {
+        alliance == .red ? "Red" : "Blue"
+    }
+
+    private func teamNumberField(
+        accessibilityLabel: String,
+        text: Binding<String>
+    ) -> some View {
+        TextField("Team number", text: text)
+            .textFieldStyle(.roundedBorder)
+            .font(.body.monospacedDigit())
+            .onSubmit(submit)
+            .accessibilityLabel(accessibilityLabel)
+    }
+}
+
+private struct NoUpcomingMatchesView: View {
+    var body: some View {
+        GroupBox {
+            HStack(spacing: 10) {
+                Image(systemName: "checkmark.circle")
+                    .font(.title2)
+                    .foregroundStyle(.green)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("No Upcoming Matches")
+                        .font(.headline)
+                    Text("No unplayed matches are present in the current event schedule. You can still predict a custom matchup above.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(5)
         }
     }
 }

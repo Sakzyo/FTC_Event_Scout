@@ -55,6 +55,60 @@ struct MatchPrediction: Identifiable, Equatable {
     var id: String { matchID }
 }
 
+enum ManualMatchEntryError: LocalizedError, Equatable {
+    case incomplete
+    case invalidTeamNumber
+    case duplicateTeamNumber
+
+    var errorDescription: String? {
+        switch self {
+        case .incomplete:
+            "Enter all four team numbers."
+        case .invalidTeamNumber:
+            "Team numbers must be positive whole numbers."
+        case .duplicateTeamNumber:
+            "Each team may appear only once in a match."
+        }
+    }
+}
+
+struct ManualMatchEntry: Equatable {
+    let redTeams: [Int]
+    let blueTeams: [Int]
+
+    static func parse(
+        redTeamNumbers: [String],
+        blueTeamNumbers: [String]
+    ) throws -> ManualMatchEntry {
+        guard redTeamNumbers.count == 2, blueTeamNumbers.count == 2 else {
+            throw ManualMatchEntryError.incomplete
+        }
+
+        let rawTeamNumbers = redTeamNumbers + blueTeamNumbers
+        guard rawTeamNumbers.allSatisfy({
+            !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }) else {
+            throw ManualMatchEntryError.incomplete
+        }
+
+        let teamNumbers = try rawTeamNumbers.map { rawValue -> Int in
+            let normalized = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let teamNumber = Int(normalized), teamNumber > 0 else {
+                throw ManualMatchEntryError.invalidTeamNumber
+            }
+            return teamNumber
+        }
+        guard Set(teamNumbers).count == teamNumbers.count else {
+            throw ManualMatchEntryError.duplicateTeamNumber
+        }
+
+        return ManualMatchEntry(
+            redTeams: Array(teamNumbers.prefix(2)),
+            blueTeams: Array(teamNumbers.suffix(2))
+        )
+    }
+}
+
 struct OPRcAnalysis: Equatable {
     let teamMetrics: [Int: TeamOPRcMetric]
     let predictions: [MatchPrediction]
