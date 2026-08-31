@@ -11,7 +11,9 @@ struct TeamMatchHistoryView: View {
                 model: model,
                 eventCode: selection.eventCode,
                 teamNumber: selection.teamNumber,
-                matches: model.matches(for: selection.teamNumber)
+                matches: model.matches(for: selection.teamNumber),
+                metric: model.currentEvent?.oprcAnalysis.teamMetrics[selection.teamNumber],
+                analysis: model.currentEvent?.oprcAnalysis
             )
             .navigationTitle("Team \(selection.teamNumber.teamNumberText) Match History")
             .toolbar {
@@ -30,9 +32,11 @@ private struct MatchHistoryContent: View {
     let eventCode: String
     let teamNumber: Int
     let matches: [MatchRecord]
+    let metric: TeamOPRcMetric?
+    let analysis: OPRcAnalysis?
 
     var body: some View {
-        if matches.isEmpty {
+        if matches.isEmpty, metric == nil {
             ContentUnavailableView(
                 "No Matches Found",
                 systemImage: "rectangle.stack",
@@ -40,20 +44,113 @@ private struct MatchHistoryContent: View {
             )
         } else {
             List {
+                if let metric {
+                    Section("Offensive Power · Scouting Estimates") {
+                        TeamOPRcSummaryView(metric: metric, analysis: analysis)
+                    }
+                }
+
                 Section {
-                    ForEach(matches) { match in
-                        MatchCardView(
-                            model: model,
-                            eventCode: eventCode,
-                            selectedTeam: teamNumber,
-                            match: match
-                        )
+                    if matches.isEmpty {
+                        Text("No match records are available for this team.")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(matches) { match in
+                            MatchCardView(
+                                model: model,
+                                eventCode: eventCode,
+                                selectedTeam: teamNumber,
+                                match: match
+                            )
+                        }
                     }
                 } header: {
                     Text("\(matches.count) matches at \(eventCode)")
                 }
             }
             .listStyle(.inset)
+        }
+    }
+}
+
+private struct TeamOPRcSummaryView: View {
+    let metric: TeamOPRcMetric
+    let analysis: OPRcAnalysis?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 24) {
+                MetricValue(title: "OPR", value: metric.opr)
+                MetricValue(title: "OPRc", value: metric.oprc)
+                MetricCount(title: "Matches used", value: metric.matchesUsed)
+                MetricCount(
+                    title: "Outliers removed",
+                    value: metric.matchesExcludedAsOutliers
+                )
+                Spacer(minLength: 0)
+            }
+
+            Text("OPRc is a scouting prediction metric, not an official FTC ranking.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if let bounds = analysis?.residualBounds {
+                DisclosureGroup("Residual IQR details") {
+                    Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 5) {
+                        diagnosticRow("Q1", value: bounds.firstQuartile)
+                        diagnosticRow("Q3", value: bounds.thirdQuartile)
+                        diagnosticRow("IQR", value: bounds.interquartileRange)
+                        diagnosticRow("Lower threshold", value: bounds.lowerBound)
+                        diagnosticRow("Upper threshold", value: bounds.upperBound)
+                    }
+                    .padding(.top, 6)
+                }
+                .font(.callout)
+            } else {
+                Text("IQR filtering was not applied because fewer than four valid alliance observations were available.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 5)
+    }
+
+    private func diagnosticRow(_ label: String, value: Double) -> some View {
+        GridRow {
+            Text(label)
+                .foregroundStyle(.secondary)
+            Text(value, format: .number.precision(.fractionLength(2)))
+                .monospacedDigit()
+        }
+    }
+}
+
+private struct MetricValue: View {
+    let title: String
+    let value: Double?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            NumericValueView(value: value, fractionDigits: 2)
+                .font(.title2.monospacedDigit().weight(.semibold))
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+private struct MetricCount: View {
+    let title: String
+    let value: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(value.formatted())
+                .font(.title2.monospacedDigit().weight(.semibold))
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 }

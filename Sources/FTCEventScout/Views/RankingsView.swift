@@ -18,6 +18,7 @@ struct RankingsView: View {
                         model: model,
                         rows: model.rankedStandings,
                         eventCode: event.eventCode,
+                        teamMetrics: event.oprcAnalysis.teamMetrics,
                         presentedSheet: $presentedSheet
                     )
                 case .preview:
@@ -327,6 +328,7 @@ private struct SortFieldLabel: View {
         case .storedRank: Text("Event rank")
         case .teamNumber: Text("Team number")
         case .totalOPR: Text("OPR")
+        case .oprc: Text("OPRc")
         case .nonPenaltyOPR: Text("Non-penalty OPR")
         case .autoOPR: Text("Auto OPR")
         case .teleopOPR: Text("Teleop OPR")
@@ -343,6 +345,7 @@ private struct LiveRankingsTable: View {
     @Bindable var model: AppModel
     let rows: [RankedStanding]
     let eventCode: String
+    let teamMetrics: [Int: TeamOPRcMetric]
     @Binding var presentedSheet: RankingSheet?
 
     var body: some View {
@@ -383,6 +386,16 @@ private struct LiveRankingsTable: View {
             TableColumn("OPR") { row in
                 NumericValueView(value: row.team.totalOPR, fractionDigits: 2)
                     .font(.title3.monospacedDigit())
+            }
+            .width(min: 70, ideal: 86, max: 110)
+
+            TableColumn("OPRc") { row in
+                NumericValueView(
+                    value: teamMetrics[row.team.teamNumber]?.oprc,
+                    fractionDigits: 2
+                )
+                .font(.title3.monospacedDigit())
+                .help("Calculated OPR after one residual-IQR outlier filtering pass")
             }
             .width(min: 70, ideal: 86, max: 110)
 

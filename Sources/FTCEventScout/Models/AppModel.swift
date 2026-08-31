@@ -371,6 +371,11 @@ final class AppModel {
             result = compare(lhs.teamNumber, rhs.teamNumber)
         case .totalOPR:
             result = compareOptional(lhs.totalOPR, rhs.totalOPR)
+        case .oprc:
+            result = compareOptional(
+                currentEvent?.oprcAnalysis.teamMetrics[lhs.teamNumber]?.oprc,
+                currentEvent?.oprcAnalysis.teamMetrics[rhs.teamNumber]?.oprc
+            )
         case .nonPenaltyOPR:
             result = compareOptional(lhs.nonPenaltyOPR, rhs.nonPenaltyOPR)
         case .autoOPR:

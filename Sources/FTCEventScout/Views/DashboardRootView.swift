@@ -64,6 +64,8 @@ private struct DashboardSidebarLabel: View {
         switch section {
         case .rankings:
             Label("Rankings", systemImage: "list.number")
+        case .predictions:
+            Label("Predictions", systemImage: "sparkles.rectangle.stack")
         case .highlights:
             Label("Highlights", systemImage: "trophy")
         }
@@ -82,6 +84,8 @@ private struct DashboardDetail: View {
                 switch selection {
                 case .rankings:
                     RankingsView(model: model, event: event)
+                case .predictions:
+                    MatchPredictionsView(event: event)
                 case .highlights:
                     HighlightsView(model: model, event: event)
                 }

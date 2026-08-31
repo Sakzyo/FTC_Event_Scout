@@ -28,6 +28,7 @@ struct FTCSeason: Identifiable, Equatable, Hashable {
 
 enum DashboardSection: String, CaseIterable, Identifiable {
     case rankings
+    case predictions
     case highlights
 
     var id: String { rawValue }
@@ -49,6 +50,7 @@ enum RankingSortField: String, CaseIterable, Identifiable {
     case storedRank
     case teamNumber
     case totalOPR
+    case oprc
     case nonPenaltyOPR
     case autoOPR
     case teleopOPR
@@ -61,7 +63,7 @@ enum RankingSortField: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 
     static let liveFields: [RankingSortField] = [
-        .storedRank, .teamNumber, .totalOPR, .nonPenaltyOPR,
+        .storedRank, .teamNumber, .totalOPR, .oprc, .nonPenaltyOPR,
         .autoOPR, .teleopOPR, .endgameOPR,
     ]
 
@@ -379,6 +381,7 @@ struct EventData: Equatable {
     let matches: [MatchRecord]
     let matchesByTeam: [Int: [MatchRecord]]
     let highlights: [EventHighlight]
+    let oprcAnalysis: OPRcAnalysis
     let statusMessage: String
 
     init(
@@ -405,6 +408,7 @@ struct EventData: Equatable {
         }
         matchesByTeam = matchIndex
         highlights = Self.makeHighlights(from: matches)
+        oprcAnalysis = MatchPredictionService.analyze(matches: matches)
         self.statusMessage = statusMessage
     }
 

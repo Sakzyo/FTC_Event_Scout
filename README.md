@@ -26,8 +26,9 @@
 ## Features
 
 - **Live event rankings.** Choose an FTC season, enter an event code, and load every registered team and scored match from FIRST Events.
-- **Sortable performance table.** Rank teams by official rank, team number, total OPR, non-penalty OPR (npOPR), Auto OPR, Teleop OPR, or Endgame OPR in either direction.
+- **Sortable performance table.** Rank teams by official rank, team number, total OPR, calculated OPRc, non-penalty OPR (npOPR), Auto OPR, Teleop OPR, or Endgame OPR in either direction.
 - **Interactive OPR charts.** Compare the top 10 teams for OPR, npOPR, Teleop, Auto, and Endgame beside the rankings table. Every metric is ordered from highest at the top to lowest at the bottom.
+- **OPRc match predictions.** Recalculate a residual-filtered offensive-power estimate from completed matches, then compare expected alliance scores, winner, signed margin, and data quality for every upcoming match.
 - **Full-event chart drill-down.** Click any compact graph to open a scrollable chart containing every team with an available value. Each team has a distinct color that remains consistent across metrics.
 - **Team match history.** Click a team number to inspect every event appearance, alliance partners, opponents, final and non-penalty scores, and the selected team's win/loss result.
 - **Detailed score breakdowns.** Expand a match to compare red and blue alliance scoring by season-specific Auto, Teleop, Endgame, and penalty categories.
@@ -64,9 +65,31 @@ The expanded chart includes every team with available data, exact values, negati
 
 ## How it works
 
-Choose a season and enter an event code; a loopback-only Python helper fetches FIRST Events data, generates CSVs, and calculates least-squares OPR estimates for total, non-penalty, autonomous, teleop, and endgame performance. The app turns those results into sortable tables so scouts can compare teams and inspect individual matches.
+Choose a season and enter an event code; a loopback-only Python helper fetches FIRST Events data, generates CSVs, and calculates least-squares OPR estimates for total, non-penalty, autonomous, teleop, and endgame performance. The Swift calculation layer also derives OPRc and upcoming-match predictions once whenever refreshed event data is loaded. The app turns those results into sortable tables so scouts can compare teams and inspect individual matches.
 
 The visible application is entirely native SwiftUI, while the Python helper uses only the standard library and listens on `127.0.0.1`. FIRST Events credentials are stored in private app data on the Mac; the unencrypted token file is restricted to the current user. When an event has not started, FTCScout data provides a historical preview of its registered teams.
+
+
+## OPRc match predictions
+
+**OPR (Offensive Power Rating)** estimates each team's offensive contribution by solving the alliance-score equations `A × x ≈ b` with least squares. FTC Event Scout's prediction layer uses a deterministic one-sided Jacobi SVD, which provides a Moore–Penrose least-squares result without directly inverting a matrix and remains defined for rank-deficient schedules.
+
+**OPRc (Offensive Power Rating – Calculated)** is this project's robust OPR variant. FIRST Events supplies alliance-level final scores, not trustworthy individual robot scores, so this repository uses alliance OPR residuals as the outlier observations (`x`):
+
+1. Keep unique matches only when both alliances have finite final scores and valid team lists.
+2. Calculate baseline OPR from all valid completed-alliance observations.
+3. For each alliance, calculate `residual = actual score − predicted score`.
+4. Calculate Q1 and Q3 with R-7 linear interpolation and `IQR = Q3 − Q1`.
+5. Remove an alliance observation only when its residual is strictly outside:
+   - lower: `x < Q1 − 1.5 × IQR`
+   - upper: `x > Q3 + 1.5 × IQR`
+6. Recalculate OPR once from the retained observations to produce OPRc. The filter is not iterated.
+
+Values exactly on either boundary remain. At least four valid alliance observations are required before filtering; smaller samples keep all observations and are marked as limited data. Repeated values and an IQR of zero are handled by the same strict boundary rule.
+
+For an upcoming match, each alliance's expected score is the sum of its members' OPRc values. The predicted margin is `red − blue`, so positive favors Red, negative favors Blue, and zero is a tie. A prediction is unavailable when any scheduled team lacks an OPRc; it is marked limited when the sample is small, a team has fewer than two retained appearances, or the schedule matrix is rank deficient. OPRc does not invent win probabilities.
+
+OPR and OPRc are scouting estimates, not official FTC rankings. Their additive model cannot fully represent alliance interaction, defense, penalties, strategy, robot failures, schedule strength, or other nonlinear match effects. Residual filtering reduces the influence of some abnormal scores but does not make a prediction certain.
 
 
 ## Getting started
