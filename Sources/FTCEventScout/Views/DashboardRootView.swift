@@ -3,6 +3,7 @@ import SwiftUI
 struct DashboardRootView: View {
     @Bindable var model: AppModel
     @SceneStorage("selectedDashboardSection") private var selectedSectionRaw = DashboardSection.rankings.rawValue
+    @State private var rankingPresentation: RankingPresentation?
 
     private var selectedSection: DashboardSection {
         DashboardSection(rawValue: selectedSectionRaw) ?? .rankings
@@ -13,9 +14,23 @@ struct DashboardRootView: View {
             DashboardSidebar(model: model, selection: $selectedSectionRaw)
                 .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 280)
         } detail: {
-            DashboardDetail(model: model, selection: selectedSection)
+            DashboardDetail(
+                model: model,
+                selection: selectedSection,
+                presentRankingContent: { rankingPresentation = $0 }
+            )
         }
         .navigationSplitViewStyle(.balanced)
+        .sheet(item: $rankingPresentation) { presentation in
+            switch presentation {
+            case .matches(let selection):
+                TeamMatchHistoryView(model: model, selection: selection)
+            case .tags(let selection):
+                TagEditorView(model: model, selection: selection)
+            case .chart(let series):
+                OPRFullChartSheet(series: series)
+            }
+        }
     }
 }
 
@@ -75,6 +90,7 @@ private struct DashboardSidebarLabel: View {
 private struct DashboardDetail: View {
     @Bindable var model: AppModel
     let selection: DashboardSection
+    let presentRankingContent: (RankingPresentation) -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -83,7 +99,11 @@ private struct DashboardDetail: View {
                 Divider()
                 switch selection {
                 case .rankings:
-                    RankingsView(model: model, event: event)
+                    RankingsView(
+                        model: model,
+                        event: event,
+                        present: presentRankingContent
+                    )
                 case .predictions:
                     MatchPredictionsView(event: event)
                 case .highlights:

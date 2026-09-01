@@ -105,12 +105,66 @@ class ScoreBreakdownTests(unittest.TestCase):
             {"autoPoints": 10, "teleopPoints": 85},
             {"minorFouls": 1, "majorFouls": 2},
             match_final=100,
-            match_foul=35,
+            match_foul_awarded=35,
         )
         values = {row["id"]: row["value"] for row in rows}
         self.assertEqual(values["penalty"], "35")
         self.assertEqual(values["penalty-minor"], "1")
         self.assertEqual(values["penalty-major"], "2")
+
+    def test_match_export_awards_each_alliance_the_opponents_committed_fouls(self):
+        match = {
+            "tournamentLevel": "qual",
+            "series": 1,
+            "matchNumber": 1,
+            "scoreRedAuto": 30,
+            "scoreBlueAuto": 20,
+            "scoreRedFinal": 100,
+            "scoreBlueFinal": 95,
+            "scoreRedFoul": 15,
+            "scoreBlueFoul": 5,
+            "teams": [
+                {"station": "Red1", "teamNumber": 1, "onField": True},
+                {"station": "Red2", "teamNumber": 2, "onField": True},
+                {"station": "Blue1", "teamNumber": 3, "onField": True},
+                {"station": "Blue2", "teamNumber": 4, "onField": True},
+            ],
+        }
+        score_lookup = {
+            ("qual", 1, 1): {
+                "Red": {
+                    "autoPoints": 30,
+                    "teleopPoints": 65,
+                    "foulPointsCommitted": 15,
+                    "minorFouls": 1,
+                    "majorFouls": 1,
+                },
+                "Blue": {
+                    "autoPoints": 20,
+                    "teleopPoints": 60,
+                    "foulPointsCommitted": 5,
+                    "minorFouls": 1,
+                    "majorFouls": 0,
+                },
+            }
+        }
+
+        row = flatten_match(match, score_lookup, 2024)
+        red_rows = {
+            item["id"]: item["value"]
+            for item in json.loads(row["Red Score Breakdown"])
+        }
+        blue_rows = {
+            item["id"]: item["value"]
+            for item in json.loads(row["Blue Score Breakdown"])
+        }
+
+        self.assertEqual(row["Red Foul Score"], 5)
+        self.assertEqual(row["Blue Foul Score"], 15)
+        self.assertEqual(row["Red Foul Committed"], 15)
+        self.assertEqual(row["Blue Foul Committed"], 5)
+        self.assertEqual(red_rows["penalty"], "5")
+        self.assertEqual(blue_rows["penalty"], "15")
 
     def test_match_export_serializes_ordered_season_breakdowns(self):
         match = {

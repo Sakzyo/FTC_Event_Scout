@@ -55,7 +55,13 @@ def _rows(*rows):
     return [row for row in rows if row is not None]
 
 
-def score_totals(season, score, match_auto=None, match_final=None, match_foul=None):
+def score_totals(
+    season,
+    score,
+    match_auto=None,
+    match_final=None,
+    match_foul_awarded=None,
+):
     """Return the cross-season totals used by OPR and event highlights."""
     season = int(season)
     if season == 2019:
@@ -124,7 +130,7 @@ def score_totals(season, score, match_auto=None, match_final=None, match_foul=No
         "auto": auto if auto is not None else match_auto,
         "teleop": teleop,
         "endgame": endgame,
-        "foul_awarded": match_foul,
+        "foul_awarded": match_foul_awarded,
         "foul_committed": foul_committed,
         "minor_fouls": minor,
         "major_fouls": major,
@@ -143,7 +149,7 @@ def build_score_breakdown_rows(
     opponent_score,
     match_auto=None,
     match_final=None,
-    match_foul=None,
+    match_foul_awarded=None,
 ):
     """Create ordered display rows matching the official season breakdown."""
     season = int(season)
@@ -161,7 +167,7 @@ def build_score_breakdown_rows(
         score,
         match_auto=match_auto,
         match_final=match_final,
-        match_foul=match_foul,
+        match_foul_awarded=match_foul_awarded,
     )
     builder = builders.get(season)
     rows = builder(score, totals) if builder else _generic_rows(totals)

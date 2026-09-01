@@ -121,27 +121,44 @@ def flatten_match(match, score_lookup, season):
 
     red_final = match.get("scoreRedFinal")
     blue_final = match.get("scoreBlueFinal")
-    red_foul_score = match.get("scoreRedFoul")
-    blue_foul_score = match.get("scoreBlueFoul")
+    # FIRST reports each alliance's committed foul points on the match record.
+    # Those points are awarded to the opposing alliance.
+    red_match_foul_committed = match.get("scoreRedFoul")
+    blue_match_foul_committed = match.get("scoreBlueFoul")
     red_totals = score_totals(
         season,
         red_score,
         match_auto=match.get("scoreRedAuto"),
         match_final=red_final,
-        match_foul=red_foul_score,
     )
     blue_totals = score_totals(
         season,
         blue_score,
         match_auto=match.get("scoreBlueAuto"),
         match_final=blue_final,
-        match_foul=blue_foul_score,
     )
 
+    red_foul_committed = (
+        red_match_foul_committed
+        if red_match_foul_committed is not None
+        else red_totals["foul_committed"]
+    )
+    blue_foul_committed = (
+        blue_match_foul_committed
+        if blue_match_foul_committed is not None
+        else blue_totals["foul_committed"]
+    )
+    red_foul_awarded = blue_foul_committed
+    blue_foul_awarded = red_foul_committed
+    red_totals["foul_awarded"] = red_foul_awarded
+    red_totals["foul_committed"] = red_foul_committed
+    blue_totals["foul_awarded"] = blue_foul_awarded
+    blue_totals["foul_committed"] = blue_foul_committed
+
     if red_totals["teleop"] is None and red_final is not None and red_totals["auto"] is not None:
-        red_totals["teleop"] = red_final - red_totals["auto"] - (red_foul_score or 0)
+        red_totals["teleop"] = red_final - red_totals["auto"] - (red_foul_awarded or 0)
     if blue_totals["teleop"] is None and blue_final is not None and blue_totals["auto"] is not None:
-        blue_totals["teleop"] = blue_final - blue_totals["auto"] - (blue_foul_score or 0)
+        blue_totals["teleop"] = blue_final - blue_totals["auto"] - (blue_foul_awarded or 0)
 
     red_breakdown = build_score_breakdown_rows(
         season,
@@ -149,7 +166,7 @@ def flatten_match(match, score_lookup, season):
         blue_score,
         match_auto=match.get("scoreRedAuto"),
         match_final=red_final,
-        match_foul=red_foul_score,
+        match_foul_awarded=red_foul_awarded,
     )
     blue_breakdown = build_score_breakdown_rows(
         season,
@@ -157,7 +174,7 @@ def flatten_match(match, score_lookup, season):
         red_score,
         match_auto=match.get("scoreBlueAuto"),
         match_final=blue_final,
-        match_foul=blue_foul_score,
+        match_foul_awarded=blue_foul_awarded,
     )
 
     return {
@@ -180,8 +197,8 @@ def flatten_match(match, score_lookup, season):
         "Red Teleop Pattern Points": red_score.get("teleopPatternPoints"),
         "Red Teleop Depot Points": red_score.get("teleopDepotPoints"),
         "Red Endgame Score": red_totals["endgame"],
-        "Red Foul Score": red_foul_score,
-        "Red Foul Committed": red_totals["foul_committed"],
+        "Red Foul Score": red_foul_awarded,
+        "Red Foul Committed": red_foul_committed,
         "Red Major Fouls": red_totals["major_fouls"],
         "Red Minor Fouls": red_totals["minor_fouls"],
         "Red Final Score": red_final,
@@ -199,8 +216,8 @@ def flatten_match(match, score_lookup, season):
         "Blue Teleop Pattern Points": blue_score.get("teleopPatternPoints"),
         "Blue Teleop Depot Points": blue_score.get("teleopDepotPoints"),
         "Blue Endgame Score": blue_totals["endgame"],
-        "Blue Foul Score": blue_foul_score,
-        "Blue Foul Committed": blue_totals["foul_committed"],
+        "Blue Foul Score": blue_foul_awarded,
+        "Blue Foul Committed": blue_foul_committed,
         "Blue Major Fouls": blue_totals["major_fouls"],
         "Blue Minor Fouls": blue_totals["minor_fouls"],
         "Blue Final Score": blue_final,

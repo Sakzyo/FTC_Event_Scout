@@ -4,7 +4,7 @@ import SwiftUI
 struct RankingsView: View {
     @Bindable var model: AppModel
     let event: EventData
-    @State private var presentation: RankingPresentation?
+    let present: (RankingPresentation) -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -41,20 +41,6 @@ struct RankingsView: View {
                     .frame(minWidth: 280, idealWidth: 320, maxWidth: 380)
             }
         }
-        .sheet(item: $presentation) { presentation in
-            switch presentation {
-            case .matches(let selection):
-                TeamMatchHistoryView(model: model, selection: selection)
-            case .tags(let selection):
-                TagEditorView(model: model, selection: selection)
-            case .chart(let series):
-                OPRFullChartSheet(series: series)
-            }
-        }
-    }
-
-    private func present(_ newPresentation: RankingPresentation) {
-        presentation = newPresentation
     }
 }
 
@@ -169,7 +155,7 @@ private struct OPRMetricChartButton: View {
     }
 }
 
-private struct OPRFullChartSheet: View {
+struct OPRFullChartSheet: View {
     @Environment(\.dismiss) private var dismiss
     let series: OPRChartSeries
 
