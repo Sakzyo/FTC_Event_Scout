@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Sakzyo/FTC_Event_Scout/releases/latest/download/FTC-Event-Scout-1.0.3.dmg"><img src="https://img.shields.io/badge/Download-v1.0.3-0A84FF?style=for-the-badge&logo=apple&logoColor=white" alt="Download FTC Event Scout 1.0.3 for macOS"></a>
+  <a href="https://github.com/Sakzyo/FTC_Event_Scout/releases/latest/download/FTC-Event-Scout-1.0.4.dmg"><img src="https://img.shields.io/badge/Download-v1.0.4-0A84FF?style=for-the-badge&logo=apple&logoColor=white" alt="Download FTC Event Scout 1.0.4 for macOS"></a>
 </p>
 
 <p align="center">
@@ -100,13 +100,13 @@ OPR and OPRc are scouting estimates, not official FTC rankings. Their additive m
 ### Installation
 
 1. Use macOS 14 or later and make sure Python 3 is installed.
-2. Download the [latest release](https://github.com/Sakzyo/FTC_Event_Scout/releases/latest/download/FTC-Event-Scout-1.0.3.dmg).
+2. Download the [latest release](https://github.com/Sakzyo/FTC_Event_Scout/releases/latest/download/FTC-Event-Scout-1.0.4.dmg).
 3. Open the downloaded DMG and drag **FTC Event Scout** into **Applications**.
 4. Launch the app and enter your FIRST Events API username and token.
 
 After installation, choose **FTC Event Scout → Settings → Updates → Check for Updates** to download and open the latest verified installer without searching for the release manually.
 
-Version 1.0.3 is ad-hoc signed and not notarized. If macOS blocks the first launch, open **System Settings → Privacy & Security** and choose **Open Anyway**.
+Version 1.0.4 is ad-hoc signed and not notarized. If macOS blocks the first launch, open **System Settings → Privacy & Security** and choose **Open Anyway**.
 
 ### Development
 
