@@ -122,37 +122,100 @@ private struct EventHeaderView: View {
     let loadState: EventLoadState
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(event.eventName.isEmpty ? event.eventCode : event.eventName)
-                        .font(.title2.weight(.semibold))
-                    if !event.eventName.isEmpty {
-                        Text(event.eventCode)
-                            .font(.callout.monospaced())
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(spacing: 8) {
+                        HUDModeBadge(mode: event.mode)
+                        if !event.eventName.isEmpty {
+                            Text(verbatim: event.eventCode)
+                                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                                .tracking(0.6)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .hudPanel(cornerRadius: 5)
+                                .textSelection(.enabled)
+                        }
+                        Text(verbatim: FTCSeason.option(for: event.season).yearRange)
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
                             .foregroundStyle(.secondary)
                     }
+
+                    Text(event.eventName.isEmpty ? event.eventCode : event.eventName)
+                        .font(.title2.weight(.semibold))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .textSelection(.enabled)
+                        .accessibilityAddTraits(.isHeader)
                 }
-                Spacer()
-                Text("\(FTCSeason.option(for: event.season).yearRange) · \(event.mode == .preview ? "PREVIEW" : "LIVE")")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(event.mode == .preview ? .orange : .secondary)
+
+                Spacer(minLength: 12)
+
+                if case .loading(let code) = loadState {
+                    HStack(spacing: 6) {
+                        ProgressView()
+                            .controlSize(.small)
+                        HUDLabel("SYNCING \(code)")
+                            .foregroundStyle(.secondary)
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Refreshing \(code)")
+                }
             }
 
-            switch loadState {
-            case .loading(let code):
-                HStack(spacing: 8) {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text("Refreshing \(code)…")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                ForEach(event.overviewStats) { stat in
+                    EventStatTile(stat: stat)
                 }
-            default:
-                StatusBannerView(message: event.statusMessage, kind: .success)
+            }
+
+            if event.mode == .preview {
+                Label(event.statusMessage, systemImage: "clock.arrow.circlepath")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
             }
         }
-        .padding(16)
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 14)
+    }
+}
+
+private struct EventStatTile: View {
+    let stat: EventOverviewStat
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HUDLabel(stat.label)
+                .foregroundStyle(.secondary)
+
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                NumericValueView(value: stat.value, fractionLength: stat.fractionLength)
+                    .font(.hudNumeric(size: 20, weight: .medium))
+                    .contentTransition(.numericText())
+                if let detail = stat.detail {
+                    Text(verbatim: detail)
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .hudPanel()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(stat.accessibilityLabel)
+        .accessibilityValue(accessibilityValue)
+    }
+
+    private var accessibilityValue: String {
+        let value = stat.value?.formatted(.number.precision(.fractionLength(stat.fractionLength)))
+            ?? "Unavailable"
+        guard let detail = stat.accessibilityDetail else { return value }
+        return "\(value), \(detail)"
     }
 }
 

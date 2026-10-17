@@ -152,6 +152,17 @@ enum OPRChartMetric: String, CaseIterable, Identifiable {
         }
     }
 
+    /// A compact label for tight switchers; pair it with `title` or `accessibilityTitle` nearby.
+    var shortTitle: String {
+        switch self {
+        case .total: "OPR"
+        case .nonPenalty: "npOPR"
+        case .teleop: "Tele"
+        case .auto: "Auto"
+        case .endgame: "End"
+        }
+    }
+
     var accessibilityTitle: String {
         switch self {
         case .total: "Overall OPR"
@@ -169,6 +180,23 @@ enum OPRChartMetric: String, CaseIterable, Identifiable {
         case .teleop: standing.teleopOPR
         case .auto: standing.autoOPR
         case .endgame: standing.endgameOPR
+        }
+    }
+}
+
+/// How the Rankings view presents OPR leaders. Chosen in Settings → General.
+enum OPRChartLayout: String, CaseIterable, Identifiable {
+    /// A compact top-10 chart for every metric, stacked vertically.
+    case stacked
+    /// One metric at a time, switched with a segmented control, showing every team.
+    case focused
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .stacked: "All Metrics"
+        case .focused: "Single Metric"
         }
     }
 }
@@ -194,6 +222,13 @@ struct OPRChartSeries: Identifiable, Equatable {
 
     var id: OPRChartMetric { metric }
     var availableTeamCount: Int { entries.count }
+    var leader: OPRChartEntry? { entries.first }
+
+    /// The mean across every team with a value, used as a field-strength reference.
+    var averageValue: Double? {
+        guard !entries.isEmpty else { return nil }
+        return entries.map(\.value).reduce(0, +) / Double(entries.count)
+    }
 
     static func make(from standings: [TeamStanding]) -> [OPRChartSeries] {
         OPRChartMetric.allCases.map { metric in
@@ -331,6 +366,17 @@ struct MatchRecord: Identifiable, Equatable, Hashable {
             let penalty = blueScore.foulScore ?? redScore.foulCommitted
             return penalty.map { final - $0 }
         }
+    }
+
+    /// A short match label such as "Q12" or "P3" for dense readouts.
+    var compactTitle: String {
+        if series == 0 {
+            return "Q\(Self.displayNumber(matchNumber))"
+        }
+        if let series {
+            return "P\(Self.displayNumber(series))"
+        }
+        return "M\(Self.displayNumber(matchNumber))"
     }
 
     private static func displayNumber(_ number: Double?) -> String {

@@ -21,7 +21,7 @@ struct SettingsView: View {
                 }
         }
         .scenePadding()
-        .frame(width: 520, height: 350)
+        .frame(width: 520, height: 450)
     }
 }
 
@@ -37,6 +37,19 @@ private struct GeneralSettingsPane: View {
                 Text("Startup")
             } footer: {
                 Text("The event code and ranking sort preference are stored only on this Mac.")
+            }
+
+            Section {
+                Picker("OPR leaders", selection: $model.oprChartLayout) {
+                    ForEach(OPRChartLayout.allCases) { layout in
+                        Text(layout.title).tag(layout)
+                    }
+                }
+                .pickerStyle(.segmented)
+            } header: {
+                Text("Rankings")
+            } footer: {
+                Text("All Metrics stacks a top-10 chart for every OPR metric. Single Metric shows one metric at a time with its leader and every team.")
             }
 
             Section {

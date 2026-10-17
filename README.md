@@ -26,8 +26,9 @@
 ## Features
 
 - **Live event rankings.** Choose an FTC season, enter an event code, and load every registered team and scored match from FIRST Events.
-- **Sortable performance table.** Rank teams by official rank, team number, total OPR, calculated OPRc, non-penalty OPR (npOPR), Auto OPR, Teleop OPR, or Endgame OPR in either direction. Numbers are right-aligned, and the sorted column is highlighted with inline bars scaled to the event leader.
-- **Interactive OPR charts.** Compare the top 10 teams for OPR, npOPR, Teleop, Auto, and Endgame beside the rankings table. Every metric is ordered from highest at the top to lowest at the bottom.
+- **Event overview strip.** Headline tiles summarize the event at a glance: team and match counts, the top npOPR team, and the high score for live events, or rookies and historical peak OPR for previews.
+- **Sortable performance table.** Rank teams by official rank, team number, total OPR, calculated OPRc, non-penalty OPR (npOPR), Auto OPR, Teleop OPR, or Endgame OPR in either direction. Numbers are right-aligned in a monospaced face, and the sorted column carries a slim gauge scaled to the event leader.
+- **Interactive OPR charts.** Compare OPR, npOPR, Teleop, Auto, and Endgame beside the rankings table, either as stacked top-10 cards for every metric or as one metric at a time with a leader readout and the full field. Switch layouts in **Settings → General → Rankings**. Every metric is ordered from highest at the top to lowest at the bottom.
 - **OPRc match predictions.** Recalculate a residual-filtered offensive-power estimate from completed matches, then compare expected alliance scores, winner, signed margin, and data quality for every upcoming match or a custom four-team matchup.
 - **Full-event chart drill-down.** Click any compact graph to open a scrollable chart containing every team with an available value. Each team has a distinct color that remains consistent across metrics.
 - **Team match history.** Click a team number to inspect every event appearance, alliance partners, opponents, final and non-penalty scores, and the selected team's win/loss result, with an event W-L-T record and the winning alliance called out on every match.
@@ -44,7 +45,9 @@
 
 The Rankings view keeps the sortable team table and five compact bar charts visible together. Direct value labels make the charts readable without hovering, while stable team colors make it easier to follow the same team from OPR to npOPR, Auto, Teleop, and Endgame.
 
-Use the **Sort by** menu or a table header to change the ranking, then click any chart to move from its top-10 summary to the complete event field.
+Use the **Sort** menu or a table header to change the ranking, then click any chart to move from its top-10 summary to the complete event field.
+
+Prefer a single, larger chart? Choose **Single Metric** under **Settings → General → Rankings**. The panel then shows a segmented metric switcher, the leader with the field average, and every team's bar for the selected metric. **All Metrics** restores the stacked cards.
 
 ### Open a complete event chart
 

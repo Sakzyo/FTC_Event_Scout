@@ -36,6 +36,7 @@ struct RankingsView: View {
                 OPRChartsPanel(
                     mode: event.mode,
                     series: event.oprChartSeries,
+                    layout: model.oprChartLayout,
                     showFullChart: { present(.chart($0)) }
                 )
                     .frame(minWidth: 280, idealWidth: 320, maxWidth: 380)
@@ -47,18 +48,23 @@ struct RankingsView: View {
 private struct OPRChartsPanel: View {
     let mode: EventMode
     let series: [OPRChartSeries]
+    let layout: OPRChartLayout
     let showFullChart: (OPRChartSeries) -> Void
 
     var body: some View {
         VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Compare OPR Leaders")
-                    .font(.headline)
-                Text("Top 10 per metric · independent scales · click to expand")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            HStack(alignment: .firstTextBaseline) {
+                Text(verbatim: "OPR LEADERS")
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .tracking(1.4)
+                    .accessibilityLabel("Compare OPR Leaders")
+                    .accessibilityAddTraits(.isHeader)
+                Spacer()
+                if mode == .live {
+                    HUDLabel(layout == .stacked ? "TOP 10 · CLICK TO EXPAND" : "ALL TEAMS")
+                        .foregroundStyle(.tertiary)
+                }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
 
@@ -77,20 +83,35 @@ private struct OPRChartsPanel: View {
                     Text("OPR charts will appear when team estimates are available.")
                 }
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 12) {
-                        ForEach(series) { metricSeries in
-                            OPRMetricChartButton(
-                                series: metricSeries,
-                                showFullChart: { showFullChart(metricSeries) }
-                            )
-                        }
-                    }
-                    .padding(12)
+                switch layout {
+                case .stacked:
+                    OPRStackedLeaders(series: series, showFullChart: showFullChart)
+                case .focused:
+                    OPRFocusedLeaders(series: series)
                 }
             }
         }
         .background(.background)
+    }
+}
+
+/// Every metric at once: a compact top-10 card per metric, each opening the full chart.
+private struct OPRStackedLeaders: View {
+    let series: [OPRChartSeries]
+    let showFullChart: (OPRChartSeries) -> Void
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(spacing: 10) {
+                ForEach(series) { metricSeries in
+                    OPRMetricChartButton(
+                        series: metricSeries,
+                        showFullChart: { showFullChart(metricSeries) }
+                    )
+                }
+            }
+            .padding(12)
+        }
     }
 }
 
@@ -100,9 +121,23 @@ private struct OPRMetricChartButton: View {
 
     var body: some View {
         Button(action: showFullChart) {
-            GroupBox {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(verbatim: series.metric.title)
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .tracking(0.6)
+                    Spacer()
+                    HUDLabel(teamCountLabel)
+                        .foregroundStyle(.secondary)
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
+                }
+
                 if series.summaryEntries.isEmpty {
                     Text("No values available")
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, minHeight: 72)
                 } else {
@@ -111,41 +146,149 @@ private struct OPRMetricChartButton: View {
                         entries: series.summaryEntries,
                         valueDomain: series.summaryValueDomain,
                         teamDomain: series.summaryTeamDomain,
-                        rowHeight: 23,
-                        minimumHeight: 112,
+                        rowHeight: 21,
+                        minimumHeight: 104,
                         desiredTickCount: 3
                     )
                 }
-            } label: {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(series.metric.title)
-                        .font(.headline)
-                    Spacer()
-                    Text(teamCountLabel)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .accessibilityHidden(true)
-                }
             }
-            .frame(maxWidth: .infinity)
-            .contentShape(Rectangle())
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(HUDCardButtonStyle())
         .disabled(series.summaryEntries.isEmpty)
         .help("Show all teams for \(series.metric.title)")
         .accessibilityLabel("\(series.metric.accessibilityTitle) chart")
-        .accessibilityValue(teamCountLabel)
+        .accessibilityValue(accessibilityCountLabel)
         .accessibilityHint("Open a larger chart containing every team with an available value.")
     }
 
     private var teamCountLabel: String {
         if series.availableTeamCount > series.summaryEntries.count {
+            return "TOP \(series.summaryEntries.count)/\(series.availableTeamCount)"
+        }
+        return "\(series.summaryEntries.count) TEAMS"
+    }
+
+    private var accessibilityCountLabel: String {
+        if series.availableTeamCount > series.summaryEntries.count {
             return "Top \(series.summaryEntries.count) of \(series.availableTeamCount)"
         }
         return "\(series.summaryEntries.count) teams"
+    }
+}
+
+/// One metric at a time: a segmented switcher, a leader readout, and every team's bar.
+private struct OPRFocusedLeaders: View {
+    let series: [OPRChartSeries]
+    @SceneStorage("focusedOPRMetric") private var selectedMetricRaw = OPRChartMetric.nonPenalty.rawValue
+
+    private var selectedSeries: OPRChartSeries? {
+        series.first { $0.metric.rawValue == selectedMetricRaw } ?? series.first
+    }
+
+    private var selection: Binding<OPRChartMetric> {
+        Binding {
+            selectedSeries?.metric ?? .nonPenalty
+        } set: { metric in
+            selectedMetricRaw = metric.rawValue
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HUDSegmentedControl(
+                accessibilityTitle: "OPR metric",
+                options: series.map(\.metric),
+                selection: selection,
+                title: \.shortTitle
+            )
+            .padding([.horizontal, .top], 12)
+
+            if let current = selectedSeries {
+                VStack(spacing: 0) {
+                    OPRLeaderReadout(series: current)
+                        .padding(12)
+
+                    if current.entries.isEmpty {
+                        ContentUnavailableView(
+                            "No \(current.metric.title) Data",
+                            systemImage: "chart.bar.xaxis",
+                            description: Text("No teams have an available value for this metric.")
+                        )
+                    } else {
+                        ScrollView {
+                            OPRBarChart(
+                                metric: current.metric,
+                                entries: current.entries,
+                                valueDomain: current.valueDomain,
+                                teamDomain: current.teamDomain,
+                                rowHeight: 21,
+                                minimumHeight: 160,
+                                desiredTickCount: 4
+                            )
+                            .padding(.horizontal, 12)
+                            .padding(.bottom, 12)
+                        }
+                    }
+                }
+                .id(current.metric)
+                .transition(.opacity)
+            }
+        }
+    }
+}
+
+private struct OPRLeaderReadout: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let series: OPRChartSeries
+
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                HUDLabel("LEADER · \(series.metric.title)")
+                    .foregroundStyle(.secondary)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    NumericValueView(value: series.leader?.value, fractionLength: 1 ... 1)
+                        .font(.hudNumeric(size: 26, weight: .medium))
+                    if let leader = series.leader {
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(TeamChartColorIdentity.color(for: leader.teamNumber, in: colorScheme))
+                                .frame(width: 6, height: 6)
+                            Text(verbatim: "#\(leader.teamLabel)")
+                                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+
+            Spacer(minLength: 8)
+
+            VStack(alignment: .trailing, spacing: 4) {
+                HUDLabel("FIELD AVG")
+                    .foregroundStyle(.secondary)
+                NumericValueView(value: series.averageValue, fractionLength: 1 ... 1)
+                    .font(.hudNumeric(size: 14, weight: .medium))
+                    .padding(.bottom, 3)
+            }
+        }
+        .padding(12)
+        .hudPanel()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(series.metric.accessibilityTitle) leader")
+        .accessibilityValue(accessibilityValue)
+    }
+
+    private var accessibilityValue: String {
+        guard let leader = series.leader else { return "Unavailable" }
+        var value = "Team \(leader.teamLabel), \(leader.value.formatted(.number.precision(.fractionLength(1))))"
+        if let average = series.averageValue {
+            value += ". Field average \(average.formatted(.number.precision(.fractionLength(1))))"
+        }
+        return value
     }
 }
 
@@ -198,6 +341,16 @@ struct OPRFullChartSheet: View {
     }
 }
 
+extension TeamChartColorIdentity {
+    static func color(for teamNumber: Int, in colorScheme: ColorScheme) -> Color {
+        Color(
+            hue: hue(for: teamNumber),
+            saturation: colorScheme == .dark ? 0.68 : 0.78,
+            brightness: colorScheme == .dark ? 0.90 : 0.58
+        )
+    }
+}
+
 private struct OPRBarChart: View {
     @Environment(\.colorScheme) private var colorScheme
     let metric: OPRChartMetric
@@ -214,16 +367,17 @@ private struct OPRBarChart: View {
                 BarMark(
                     xStart: .value("Zero baseline", 0),
                     xEnd: .value(metric.accessibilityTitle, entry.value),
-                    y: .value("Team", entry.teamLabel)
+                    y: .value("Team", entry.teamLabel),
+                    height: .ratio(0.58)
                 )
-                .foregroundStyle(teamColor(for: entry.teamNumber))
-                .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+                .foregroundStyle(barGradient(for: entry))
+                .clipShape(Capsule())
                 .annotation(
                     position: entry.value >= 0 ? .trailing : .leading,
                     spacing: 5
                 ) {
                     Text(entry.value, format: .number.precision(.fractionLength(1)))
-                        .font(.caption.monospacedDigit().weight(.medium))
+                        .font(.hudNumeric(size: 10.5, weight: .medium))
                         .foregroundStyle(.primary)
                 }
                 .accessibilityLabel("Team \(entry.teamLabel)")
@@ -233,21 +387,26 @@ private struct OPRBarChart: View {
             }
 
             RuleMark(x: .value("Zero", 0))
-                .foregroundStyle(.secondary.opacity(0.65))
+                .lineStyle(StrokeStyle(lineWidth: 1))
+                .foregroundStyle(Color.primary.opacity(0.28))
         }
         .chartXScale(domain: valueDomain)
         .chartYScale(domain: teamDomain)
         .chartXAxis {
             AxisMarks(position: .bottom, values: .automatic(desiredCount: desiredTickCount)) {
-                AxisGridLine()
-                AxisTick()
+                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 3]))
+                    .foregroundStyle(Color.primary.opacity(0.18))
+                // Explicit colors: hierarchical styles inside Charts derive from the accent tint.
                 AxisValueLabel()
+                    .font(.hudNumeric(size: 9))
+                    .foregroundStyle(Color.primary.opacity(0.45))
             }
         }
         .chartYAxis {
             AxisMarks(position: .leading) {
                 AxisValueLabel()
-                    .font(.caption.monospacedDigit())
+                    .font(.hudNumeric(size: 10.5, weight: .medium))
+                    .foregroundStyle(Color.primary.opacity(0.7))
             }
         }
         .chartLegend(.hidden)
@@ -256,20 +415,28 @@ private struct OPRBarChart: View {
         .accessibilityHint("Horizontal bars compare teams; each bar is also labeled by team number and value.")
     }
 
-    private func teamColor(for teamNumber: Int) -> Color {
-        Color(
-            hue: TeamChartColorIdentity.hue(for: teamNumber),
-            saturation: colorScheme == .dark ? 0.68 : 0.78,
-            brightness: colorScheme == .dark ? 0.90 : 0.58
+    /// Bars brighten toward their value end, so the eye lands on the labeled tip.
+    private func barGradient(for entry: OPRChartEntry) -> LinearGradient {
+        let color = TeamChartColorIdentity.color(for: entry.teamNumber, in: colorScheme)
+        let isPositive = entry.value >= 0
+        return LinearGradient(
+            colors: [color.opacity(0.45), color],
+            startPoint: isPositive ? .leading : .trailing,
+            endPoint: isPositive ? .trailing : .leading
         )
     }
 }
 
 private struct RankingsControls: View {
     @Bindable var model: AppModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
+            HUDLabel("SORT")
+                .foregroundStyle(.tertiary)
+                .accessibilityHidden(true)
+
             Picker("Sort by", selection: $model.sortField) {
                 ForEach(model.availableSortFields) { field in
                     SortFieldLabel(field: field)
@@ -277,33 +444,36 @@ private struct RankingsControls: View {
                 }
             }
             .pickerStyle(.menu)
-            .frame(maxWidth: 220)
+            .labelsHidden()
+            .fixedSize()
 
             Button {
-                model.sortDirection = model.sortDirection == .ascending
-                    ? .descending
-                    : .ascending
+                model.sortDirection = isAscending ? .descending : .ascending
             } label: {
-                Label(
-                    model.sortDirection == .ascending ? "Ascending" : "Descending",
-                    systemImage: model.sortDirection == .ascending
-                        ? "arrow.up"
-                        : "arrow.down"
-                )
+                HStack(spacing: 5) {
+                    Image(systemName: "arrow.down")
+                        .font(.system(size: 10, weight: .bold))
+                        .rotationEffect(.degrees(isAscending ? 180 : 0))
+                    HUDLabel(isAscending ? "ASC" : "DESC")
+                }
+                .padding(.horizontal, 8)
+                .frame(height: 22)
+                .contentShape(Rectangle())
             }
-            .help(model.sortDirection == .ascending ? "Sort ascending" : "Sort descending")
+            .buttonStyle(HUDCardButtonStyle(cornerRadius: 6))
+            .animation(reduceMotion ? nil : .hudEaseInOut, value: isAscending)
+            .help(isAscending ? "Sorted ascending — click to sort descending" : "Sorted descending — click to sort ascending")
+            .accessibilityLabel("Sort direction")
+            .accessibilityValue(isAscending ? "Ascending" : "Descending")
 
             Spacer()
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(model.rankedStandings.count, format: .number)
-                    .font(.title3.monospacedDigit())
-                Text("teams")
-                    .font(.callout)
-            }
-            .foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 7)
+    }
+
+    private var isAscending: Bool {
+        model.sortDirection == .ascending
     }
 }
 
@@ -343,19 +513,14 @@ private struct LiveRankingsTable: View {
 
         Table(rows, sortOrder: model.rankingTableSortOrder) {
             TableColumn("#") { row in
-                Text(row.order.formatted())
-                    .font(.title3)
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
+                RankingOrderText(order: row.order, total: rows.count)
             }
             .width(min: 36, ideal: 44, max: 60)
             .alignment(.numeric)
 
             TableColumn("Rank", sortUsing: RankingColumnComparator(.storedRank)) { row in
                 Text(row.team.storedRank.formatted())
-                    .font(.title3)
-                    .monospacedDigit()
-                    .fontWeight(scale.isSorted(.storedRank) ? .semibold : .regular)
+                    .font(.hudNumeric(weight: scale.isSorted(.storedRank) ? .semibold : .regular))
             }
             .width(min: 52, ideal: 60, max: 74)
             .alignment(.numeric)
@@ -365,8 +530,7 @@ private struct LiveRankingsTable: View {
                     present(.matches(eventCode: eventCode, teamNumber: row.team.teamNumber))
                 } label: {
                     Text(row.team.teamNumber.teamNumberText)
-                        .font(.title3.monospacedDigit())
-                        .fontWeight(scale.isSorted(.teamNumber) ? .semibold : .regular)
+                        .font(.hudNumeric(weight: scale.isSorted(.teamNumber) ? .semibold : .medium))
                         .foregroundStyle(.tint)
                         .frame(maxWidth: .infinity, minHeight: 22, alignment: .leading)
                         .contentShape(Rectangle())
@@ -451,19 +615,14 @@ private struct PreviewRankingsTable: View {
 
         Table(rows, sortOrder: model.rankingTableSortOrder) {
             TableColumn("Rank") { row in
-                Text(row.order.formatted())
-                    .font(.title3)
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
+                RankingOrderText(order: row.order, total: rows.count)
             }
             .width(min: 48, ideal: 56, max: 70)
             .alignment(.numeric)
 
             TableColumn("Team", sortUsing: RankingColumnComparator(.teamNumber)) { row in
                 Text(row.team.teamNumber.teamNumberText)
-                    .font(.title3)
-                    .monospacedDigit()
-                    .fontWeight(scale.isSorted(.teamNumber) ? .semibold : .regular)
+                    .font(.hudNumeric(weight: scale.isSorted(.teamNumber) ? .semibold : .medium))
             }
             .width(min: 72, ideal: 84, max: 100)
 
@@ -491,37 +650,35 @@ private struct PreviewRankingsTable: View {
 
             TableColumn("Best Season", sortUsing: RankingColumnComparator(.bestSeason)) { row in
                 OptionalIntegerValue(value: row.team.bestSeason, usesGrouping: false)
-                    .font(.title3.monospacedDigit())
-                    .fontWeight(scale.isSorted(.bestSeason) ? .semibold : .regular)
+                    .font(.hudNumeric(weight: scale.isSorted(.bestSeason) ? .semibold : .regular))
             }
             .width(min: 92, ideal: 104, max: 120)
             .alignment(.numeric)
 
             TableColumn("\(String(season))") { row in
                 NumericValueView(value: row.team.perSeason[String(season)]?.total, fractionDigits: 2)
-                    .font(.title3.monospacedDigit())
+                    .font(.hudNumeric())
             }
             .width(min: 66, ideal: 78, max: 96)
             .alignment(.numeric)
 
             TableColumn("\(String(season - 1))") { row in
                 NumericValueView(value: row.team.perSeason[String(season - 1)]?.total, fractionDigits: 2)
-                    .font(.title3.monospacedDigit())
+                    .font(.hudNumeric())
             }
             .width(min: 66, ideal: 78, max: 96)
             .alignment(.numeric)
 
             TableColumn("\(String(season - 2))") { row in
                 NumericValueView(value: row.team.perSeason[String(season - 2)]?.total, fractionDigits: 2)
-                    .font(.title3.monospacedDigit())
+                    .font(.hudNumeric())
             }
             .width(min: 66, ideal: 78, max: 96)
             .alignment(.numeric)
 
             TableColumn("Rookie Year", sortUsing: RankingColumnComparator(.rookieYear)) { row in
                 OptionalIntegerValue(value: row.team.rookieYear, usesGrouping: false)
-                    .font(.title3.monospacedDigit())
-                    .fontWeight(scale.isSorted(.rookieYear) ? .semibold : .regular)
+                    .font(.hudNumeric(weight: scale.isSorted(.rookieYear) ? .semibold : .regular))
             }
             .width(min: 92, ideal: 104, max: 120)
             .alignment(.numeric)
@@ -613,23 +770,30 @@ private struct RankingMetricCell: View {
 
     var body: some View {
         let isSorted = scale.isSorted(field)
-        let fraction = scale.fraction(for: value, in: field)
 
         NumericValueView(value: value, fractionDigits: 2)
-            .font(.title3.monospacedDigit())
-            .fontWeight(isSorted ? .semibold : .regular)
-            .padding(.horizontal, 5)
+            .font(.hudNumeric(weight: isSorted ? .semibold : .regular))
             .frame(maxWidth: .infinity, alignment: .trailing)
-            .background(alignment: .leading) {
-                if fraction > 0 {
-                    GeometryReader { proxy in
-                        RoundedRectangle(cornerRadius: 4, style: .continuous)
-                            .fill(Color.accentColor.opacity(0.22))
-                            .frame(width: proxy.size.width * fraction)
-                    }
-                    .accessibilityHidden(true)
+            .padding(.bottom, isSorted ? 5 : 0)
+            .overlay(alignment: .bottom) {
+                if isSorted {
+                    HUDGauge(fraction: scale.fraction(for: value, in: field))
                 }
             }
+    }
+}
+
+/// The display order, zero-padded to the field size so every row has the same width.
+private struct RankingOrderText: View {
+    let order: Int
+    let total: Int
+
+    var body: some View {
+        let width = max(String(total).count, 2)
+        Text(verbatim: String(repeating: "0", count: max(width - String(order).count, 0)) + String(order))
+            .font(.hudNumeric(size: 12, weight: .medium))
+            .foregroundStyle(.secondary)
+            .accessibilityLabel(order.formatted())
     }
 }
 

@@ -8,6 +8,7 @@ struct PreferencesService {
         static let rankingSortField = "rankingSortField"
         static let sortDirection = "sortDirection"
         static let rememberLastEvent = "rememberLastEvent"
+        static let oprChartLayout = "oprChartLayout"
     }
 
     private let defaults: UserDefaults
@@ -19,6 +20,7 @@ struct PreferencesService {
             Key.rankingSortField: RankingSortField.nonPenaltyOPR.rawValue,
             Key.sortDirection: SortDirection.descending.rawValue,
             Key.rememberLastEvent: true,
+            Key.oprChartLayout: OPRChartLayout.stacked.rawValue,
         ])
     }
 
@@ -59,5 +61,13 @@ struct PreferencesService {
     var rememberLastEvent: Bool {
         get { defaults.bool(forKey: Key.rememberLastEvent) }
         nonmutating set { defaults.set(newValue, forKey: Key.rememberLastEvent) }
+    }
+
+    var oprChartLayout: OPRChartLayout {
+        get {
+            let rawValue = defaults.string(forKey: Key.oprChartLayout) ?? ""
+            return OPRChartLayout(rawValue: rawValue) ?? .stacked
+        }
+        nonmutating set { defaults.set(newValue.rawValue, forKey: Key.oprChartLayout) }
     }
 }

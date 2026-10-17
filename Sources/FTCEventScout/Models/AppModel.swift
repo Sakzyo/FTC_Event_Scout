@@ -47,6 +47,12 @@ final class AppModel {
         }
     }
 
+    var oprChartLayout: OPRChartLayout {
+        didSet {
+            preferences.oprChartLayout = oprChartLayout
+        }
+    }
+
     private(set) var currentEvent: EventData?
     private(set) var rankedStandings: [RankedStanding] = []
     private(set) var storedTagGroups: [StoredTeamTags] = []
@@ -83,6 +89,7 @@ final class AppModel {
         sortField = preferences.rankingSortField
         sortDirection = preferences.sortDirection
         rememberLastEvent = preferences.rememberLastEvent
+        oprChartLayout = preferences.oprChartLayout
 
         if preferredUsername.isEmpty && !initialUsername.isEmpty {
             preferences.firstAPIUsername = initialUsername
