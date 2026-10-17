@@ -96,7 +96,7 @@ private struct DashboardDetail: View {
         VStack(spacing: 0) {
             if let event = model.currentEvent {
                 EventHeaderView(event: event, loadState: model.eventLoadState)
-                Divider()
+                    .padding(12)
                 switch selection {
                 case .rankings:
                     RankingsView(
@@ -105,49 +105,38 @@ private struct DashboardDetail: View {
                         present: presentRankingContent
                     )
                 case .predictions:
+                    Divider()
                     MatchPredictionsView(event: event)
+                        .background(.background)
                 case .highlights:
+                    Divider()
                     HighlightsView(model: model, event: event)
+                        .background(.background)
                 }
             } else {
                 EmptyDashboardView(loadState: model.eventLoadState, retry: model.refreshEvent)
             }
         }
+        .background(model.currentEvent == nil ? AnyShapeStyle(.background) : AnyShapeStyle(.scoutPage))
         .navigationTitle(model.currentEvent?.eventCode ?? "Event")
     }
 }
 
-private struct EventHeaderView: View {
+/// The event's title card, modeled on ftcscout.org: a bold season-and-name title,
+/// then icon rows for the season, event code, data source, and headline figures.
+struct EventHeaderView: View {
     let event: EventData
     let loadState: EventLoadState
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .center, spacing: 12) {
-                VStack(alignment: .leading, spacing: 5) {
-                    HStack(spacing: 8) {
-                        HUDModeBadge(mode: event.mode)
-                        if !event.eventName.isEmpty {
-                            Text(verbatim: event.eventCode)
-                                .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                                .tracking(0.6)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .hudPanel(cornerRadius: 5)
-                                .textSelection(.enabled)
-                        }
-                        Text(verbatim: FTCSeason.option(for: event.season).yearRange)
-                            .font(.system(size: 11, weight: .medium, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Text(event.eventName.isEmpty ? event.eventCode : event.eventName)
-                        .font(.title2.weight(.semibold))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        .textSelection(.enabled)
-                        .accessibilityAddTraits(.isHeader)
-                }
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text(verbatim: "\(event.season) \(event.eventName.isEmpty ? event.eventCode : event.eventName)")
+                    .font(.system(size: 20, weight: .bold))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .textSelection(.enabled)
+                    .accessibilityAddTraits(.isHeader)
 
                 Spacer(minLength: 12)
 
@@ -155,57 +144,82 @@ private struct EventHeaderView: View {
                     HStack(spacing: 6) {
                         ProgressView()
                             .controlSize(.small)
-                        HUDLabel("SYNCING \(code)")
-                            .foregroundStyle(.secondary)
+                        Text("Syncing \(code)")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.scoutSecondaryText)
                     }
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("Refreshing \(code)")
                 }
             }
 
-            HStack(spacing: 8) {
+            ScoutFlowLayout(spacing: 18, lineSpacing: 6) {
+                ScoutInfoRow(systemImage: "calendar") {
+                    Text(verbatim: "\(season.yearRange) · \(season.gameName)")
+                }
+                if !event.eventName.isEmpty {
+                    ScoutInfoRow(systemImage: "number") {
+                        Text(verbatim: event.eventCode)
+                            .textSelection(.enabled)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Event code \(event.eventCode)")
+                }
+                ScoutInfoRow(systemImage: event.mode == .live ? "dot.radiowaves.left.and.right" : "clock.arrow.circlepath") {
+                    Text(event.mode == .live ? "Live event data" : "Historical preview")
+                }
+            }
+            .font(.system(size: 12))
+
+            Rectangle()
+                .fill(.scoutSeparator)
+                .frame(height: 1)
+                .accessibilityHidden(true)
+
+            ScoutFlowLayout(spacing: 22, lineSpacing: 8) {
                 ForEach(event.overviewStats) { stat in
-                    EventStatTile(stat: stat)
+                    EventStatRow(stat: stat)
                 }
             }
 
             if event.mode == .preview {
-                Label(event.statusMessage, systemImage: "clock.arrow.circlepath")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
+                ScoutInfoRow(systemImage: "info.circle") {
+                    Text(event.statusMessage)
+                        .foregroundStyle(.scoutSecondaryText)
+                        .lineLimit(2)
+                        .textSelection(.enabled)
+                }
+                .font(.system(size: 11))
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
-        .padding(.bottom, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .scoutCard()
+    }
+
+    private var season: FTCSeason {
+        FTCSeason.option(for: event.season)
     }
 }
 
-private struct EventStatTile: View {
+private struct EventStatRow: View {
     let stat: EventOverviewStat
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HUDLabel(stat.label)
-                .foregroundStyle(.secondary)
-
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
+        ScoutInfoRow(systemImage: stat.symbolName) {
+            HStack(alignment: .firstTextBaseline, spacing: 5) {
+                Text(verbatim: stat.label)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.scoutSecondaryText)
                 NumericValueView(value: stat.value, fractionLength: stat.fractionLength)
-                    .font(.hudNumeric(size: 20, weight: .medium))
+                    .font(.scoutNumeric(size: 15, weight: .semibold))
                     .contentTransition(.numericText())
                 if let detail = stat.detail {
                     Text(verbatim: detail)
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                        .font(.scoutNumeric(size: 11))
+                        .foregroundStyle(.scoutSecondaryText)
                 }
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .hudPanel()
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(stat.accessibilityLabel)
         .accessibilityValue(accessibilityValue)

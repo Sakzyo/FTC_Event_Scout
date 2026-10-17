@@ -120,6 +120,18 @@ final class AppModel {
             : RankingSortField.liveFields
     }
 
+    /// Applies a column-header click: a new column sorts in its natural direction,
+    /// the active column flips direction.
+    func sortByColumn(_ field: RankingSortField) {
+        let next = field.headerSort(currentField: sortField, currentDirection: sortDirection)
+        if sortDirection != next.direction {
+            sortDirection = next.direction
+        }
+        if sortField != next.field {
+            sortField = next.field
+        }
+    }
+
     var availableSeasons: [FTCSeason] {
         FTCSeason.supported
     }
@@ -399,12 +411,28 @@ final class AppModel {
             result = compareOptional(lhs.bestSeason, rhs.bestSeason)
         case .rookieYear:
             result = compareOptional(lhs.rookieYear, rhs.rookieYear)
+        case .record:
+            result = compareOptional(playedRecord(for: lhs), playedRecord(for: rhs))
+        case .played:
+            // Teams without a scored qualification match have played zero, as the column shows.
+            result = compare(
+                currentEvent?.teamRecords[lhs.teamNumber]?.played ?? 0,
+                currentEvent?.teamRecords[rhs.teamNumber]?.played ?? 0
+            )
         }
 
         if result == 0 { return lhs.teamNumber < rhs.teamNumber }
         if result == 2 { return false }
         if result == -2 { return true }
         return sortDirection == .ascending ? result < 0 : result > 0
+    }
+
+    private func playedRecord(for standing: TeamStanding) -> TeamEventRecord? {
+        guard let record = currentEvent?.teamRecords[standing.teamNumber],
+              record.played > 0 else {
+            return nil
+        }
+        return record
     }
 
     private func compare<T: Comparable>(_ lhs: T, _ rhs: T) -> Int {

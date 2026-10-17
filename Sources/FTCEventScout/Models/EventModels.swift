@@ -59,18 +59,40 @@ enum RankingSortField: String, CaseIterable, Identifiable {
     case highestOPR
     case bestSeason
     case rookieYear
+    case record
+    case played
 
     var id: String { rawValue }
 
     static let liveFields: [RankingSortField] = [
-        .storedRank, .teamNumber, .totalOPR, .oprc, .nonPenaltyOPR,
-        .autoOPR, .teleopOPR, .endgameOPR,
+        .storedRank, .teamNumber, .record, .played, .totalOPR, .oprc,
+        .nonPenaltyOPR, .autoOPR, .teleopOPR, .endgameOPR,
     ]
 
     static let previewFields: [RankingSortField] = [
         .storedRank, .teamNumber, .teamName, .highestOPR,
         .bestSeason, .rookieYear,
     ]
+
+    /// The direction a column sorts in when its header is first clicked:
+    /// identifiers ascend, performance figures put the strongest teams first.
+    var defaultSortDirection: SortDirection {
+        switch self {
+        case .storedRank, .teamNumber, .teamName, .rookieYear: .ascending
+        case .totalOPR, .oprc, .nonPenaltyOPR, .autoOPR, .teleopOPR, .endgameOPR,
+             .highestOPR, .bestSeason, .record, .played: .descending
+        }
+    }
+
+    /// The sort after clicking `self`'s column header: a new column starts in its natural
+    /// direction, and clicking the active column again reverses it.
+    func headerSort(
+        currentField: RankingSortField,
+        currentDirection: SortDirection
+    ) -> (field: RankingSortField, direction: SortDirection) {
+        guard self == currentField else { return (self, defaultSortDirection) }
+        return (self, currentDirection == .ascending ? .descending : .ascending)
+    }
 }
 
 enum SortDirection: String, CaseIterable, Identifiable {
@@ -426,6 +448,8 @@ struct EventData: Equatable {
     let oprChartSeries: [OPRChartSeries]
     let matches: [MatchRecord]
     let matchesByTeam: [Int: [MatchRecord]]
+    /// Qualification records keyed by team number; teams without a scored match are absent.
+    let teamRecords: [Int: TeamEventRecord]
     let highlights: [EventHighlight]
     let oprcAnalysis: OPRcAnalysis
     let statusMessage: String
@@ -453,6 +477,7 @@ struct EventData: Equatable {
             }
         }
         matchesByTeam = matchIndex
+        teamRecords = TeamEventRecord.make(from: matches)
         highlights = Self.makeHighlights(from: matches)
         oprcAnalysis = MatchPredictionService.analyze(matches: matches)
         self.statusMessage = statusMessage

@@ -26,12 +26,12 @@
 ## Features
 
 - **Live event rankings.** Choose an FTC season, enter an event code, and load every registered team and scored match from FIRST Events.
-- **Event overview strip.** Headline tiles summarize the event at a glance: team and match counts, the top npOPR team, and the high score for live events, or rookies and historical peak OPR for previews.
-- **Sortable performance table.** Rank teams by official rank, team number, total OPR, calculated OPRc, non-penalty OPR (npOPR), Auto OPR, Teleop OPR, or Endgame OPR in either direction. Numbers are right-aligned in a monospaced face, and the sorted column carries a slim gauge scaled to the event leader.
+- **Event header card.** A compact card shows the season, game, and data mode, followed by inline stats: team and match counts, the top npOPR team, and the high score for live events, or rookies and historical peak OPR for previews.
+- **FTCScout-style rankings table.** Color-grouped columns (green for record and matches played, purple for OPR metrics, blue for historical peaks) sit under a pinned header with zebra rows. Click any header to sort by official rank, team number, qualification W-L-T record, matches played, total OPR, calculated OPRc, non-penalty OPR (npOPR), Auto, Teleop, or Endgame OPR; click it again to reverse. Columns stretch to fill wide windows and scroll horizontally in narrow ones.
 - **Interactive OPR charts.** Compare OPR, npOPR, Teleop, Auto, and Endgame beside the rankings table, either as stacked top-10 cards for every metric or as one metric at a time with a leader readout and the full field. Switch layouts in **Settings → General → Rankings**. Every metric is ordered from highest at the top to lowest at the bottom.
 - **OPRc match predictions.** Recalculate a residual-filtered offensive-power estimate from completed matches, then compare expected alliance scores, winner, signed margin, and data quality for every upcoming match or a custom four-team matchup.
 - **Full-event chart drill-down.** Click any compact graph to open a scrollable chart containing every team with an available value. Each team has a distinct color that remains consistent across metrics.
-- **Team match history.** Click a team number to inspect every event appearance, alliance partners, opponents, final and non-penalty scores, and the selected team's win/loss result, with an event W-L-T record and the winning alliance called out on every match.
+- **Team match history.** Click a team's row to inspect every event appearance, alliance partners, opponents, final and non-penalty scores, and the selected team's win/loss result, with an event W-L-T record and the winning alliance called out on every match.
 - **Detailed score breakdowns.** Expand a match to compare red and blue alliance scoring by season-specific Auto, Teleop, Endgame, and penalty categories. The higher value in each numeric row is emphasized so swings are easy to spot.
 - **Event highlights.** Surface the highest final, non-penalty, Auto, and Teleop alliance scores, including ties and the teams responsible.
 - **Local scouting tags.** Add reusable, color-coded notes to teams and see them in rankings, highlights, and match history. Tags stay on the Mac.
@@ -45,7 +45,7 @@
 
 The Rankings view keeps the sortable team table and five compact bar charts visible together. Direct value labels make the charts readable without hovering, while stable team colors make it easier to follow the same team from OPR to npOPR, Auto, Teleop, and Endgame.
 
-Use the **Sort** menu or a table header to change the ranking, then click any chart to move from its top-10 summary to the complete event field.
+Click a table header (or use the **Sort** menu) to change the ranking, then click any chart to move from its top-10 summary to the complete event field.
 
 Prefer a single, larger chart? Choose **Single Metric** under **Settings → General → Rankings**. The panel then shows a segmented metric switcher, the leader with the field average, and every team's bar for the selected metric. **All Metrics** restores the stacked cards.
 
@@ -62,7 +62,7 @@ The expanded chart includes every team with available data, exact values, negati
 1. Select the season in the toolbar and enter the FIRST event code.
 2. Sort the Rankings table by the metric that matters to your scouting question.
 3. Compare the compact graphs or click one to inspect the whole-event distribution.
-4. Click a team number to open its match history, then expand **Score Breakdown** for alliance-level detail.
+4. Click a team's row to open its match history, then expand **Score Breakdown** for alliance-level detail.
 5. Use the add-tag control to record traits such as `Strong Auto`, `Consistent`, or `Watch Defense`; reuse the same tag for other teams at that event.
 6. Open **Highlights** in the sidebar to find the matches and alliances behind the event's best scores.
 
