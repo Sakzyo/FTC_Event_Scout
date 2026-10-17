@@ -69,16 +69,18 @@ final class RankingStatTableTests: XCTestCase {
         XCTAssertEqual(RankingColumn.seasonOPR(2024).title, "2024")
     }
 
-    func testColumnsAreColorGroupedLikeFTCScout() {
+    func testColumnsAreGroupedInBlueAndRed() {
         XCTAssertEqual(RankingColumn.team.color, .white)
         XCTAssertEqual(RankingColumn.eventRank.color, .white)
-        XCTAssertEqual(RankingColumn.record.color, .green)
-        XCTAssertEqual(RankingColumn.played.color, .green)
-        XCTAssertEqual(RankingColumn.metric(.oprc).color, .purple)
+        XCTAssertEqual(RankingColumn.record.color, .blue)
+        XCTAssertEqual(RankingColumn.played.color, .blue)
+        XCTAssertEqual(RankingColumn.rookieYear.color, .blue)
+        XCTAssertEqual(RankingColumn.metric(.oprc).color, .red)
+        XCTAssertEqual(RankingColumn.seasonOPR(2024).color, .red)
         XCTAssertEqual(RankingColumn.metric(.highestOPR).color, .blue)
         XCTAssertEqual(RankingColumn.bestSeason.color, .lightBlue)
         XCTAssertNil(ScoutStatColor.white.cellTint)
-        XCTAssertNotNil(ScoutStatColor.purple.cellTint)
+        XCTAssertNotNil(ScoutStatColor.red.cellTint)
     }
 
     func testOnlyDerivedColumnsAreUnsortable() {

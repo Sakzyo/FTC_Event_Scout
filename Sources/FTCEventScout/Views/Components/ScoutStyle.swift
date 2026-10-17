@@ -1,7 +1,8 @@
 import SwiftUI
 
 // An ftcscout.org-inspired design language for the Rankings tab: flat cards with hairline
-// borders on a soft gray page, folder tabs, pill buttons, and color-grouped stat columns.
+// borders, folder tabs, pill buttons, and color-grouped stat columns. Surfaces, team numbers,
+// and icons keep the app's native window background and accent color.
 
 /// A color with explicit light and dark values, resolved from the view's color scheme.
 struct ScoutColor: ShapeStyle {
@@ -32,23 +33,19 @@ struct ScoutColor: ShapeStyle {
 }
 
 extension ShapeStyle where Self == ScoutColor {
-    static var scoutPage: ScoutColor { ScoutColor((242, 242, 242), (22, 22, 22)) }
-    static var scoutCard: ScoutColor { ScoutColor((255, 255, 255), (45, 45, 45)) }
     static var scoutSeparator: ScoutColor { ScoutColor((211, 211, 211), (74, 78, 81)) }
     static var scoutSecondaryText: ScoutColor { ScoutColor((99, 100, 102), (183, 183, 184)) }
-    static var scoutRowHover: ScoutColor { ScoutColor((240, 240, 240), (58, 58, 58)) }
-    static var scoutTabHover: ScoutColor { ScoutColor((251, 251, 251), (35, 35, 35)) }
     static var scoutFormBackground: ScoutColor { ScoutColor((239, 239, 239), (25, 25, 25)) }
     static var scoutFormHover: ScoutColor { ScoutColor((227, 227, 227), (35, 35, 35)) }
     static var scoutFormPressed: ScoutColor { ScoutColor((215, 215, 215), (45, 45, 45)) }
-    /// The teal used for icons and selected controls.
-    static var scoutTheme: ScoutColor { ScoutColor((44, 102, 110), (57, 132, 142)) }
-    /// The purple outline that marks the hovered row.
-    static var scoutFocus: ScoutColor { ScoutColor((170, 0, 255), (196, 79, 255)) }
-
     static var scoutZebra: ScoutColor {
         ScoutColor(light: Color.black.opacity(0.0396), dark: Color.white.opacity(0.041))
     }
+}
+
+extension ShapeStyle where Self == BackgroundStyle {
+    /// Cards share the window's native background; hairline borders set them apart.
+    static var scoutCard: BackgroundStyle { .background }
 }
 
 /// The color group of a stats column. Headers are filled with the color, and
@@ -58,22 +55,22 @@ enum ScoutStatColor: Hashable {
     case red
     case blue
     case lightBlue
-    case purple
-    case green
 
-    var headerFill: ScoutColor {
+    private var tone: ScoutColor? {
         switch self {
-        case .white: .scoutCard
+        case .white: nil
         case .red: ScoutColor((244, 67, 54), (204, 47, 47))
         case .blue: ScoutColor((25, 118, 210), (27, 87, 179))
         case .lightBlue: ScoutColor((33, 150, 243), (25, 118, 210))
-        case .purple: ScoutColor((170, 0, 255), (127, 0, 190))
-        case .green: ScoutColor((67, 160, 71), (46, 125, 50))
         }
     }
 
+    var headerFill: AnyShapeStyle {
+        tone.map { AnyShapeStyle($0) } ?? AnyShapeStyle(.scoutCard)
+    }
+
     var cellTint: ScoutColor? {
-        self == .white ? nil : headerFill.opacity(0.15)
+        tone?.opacity(0.15)
     }
 
     var headerText: Color {
@@ -128,7 +125,7 @@ enum ScoutFormat {
 // MARK: - Cards
 
 extension View {
-    /// A flat white card with a hairline border and 8pt corners.
+    /// A flat card with a hairline border and 8pt corners.
     func scoutCard(padding: CGFloat = 12) -> some View {
         let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
         return self
@@ -274,7 +271,7 @@ private struct ScoutPillButton: View {
             .background(fill(isPressed: isPressed), in: Capsule())
             .overlay(
                 Capsule().strokeBorder(
-                    isSelected ? AnyShapeStyle(.scoutTheme) : AnyShapeStyle(.scoutSeparator),
+                    isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(.scoutSeparator),
                     lineWidth: 1
                 )
             )
@@ -288,14 +285,14 @@ private struct ScoutPillButton: View {
     }
 
     private func fill(isPressed: Bool) -> AnyShapeStyle {
-        if isSelected { return AnyShapeStyle(.scoutTheme) }
+        if isSelected { return AnyShapeStyle(.tint) }
         if isPressed { return AnyShapeStyle(.scoutFormPressed) }
         if isHovering && isEnabled { return AnyShapeStyle(.scoutFormHover) }
         return AnyShapeStyle(.scoutFormBackground)
     }
 }
 
-/// A bordered card that acts as a button. Hover draws the same purple outline as table rows;
+/// A bordered card that acts as a button. Hover draws the same accent outline as table rows;
 /// press scales it down slightly, or only darkens it under Reduce Motion.
 struct ScoutCardButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
@@ -315,10 +312,11 @@ private struct ScoutCardButton: View {
         let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
 
         configuration.label
-            .background(isPressed ? AnyShapeStyle(.scoutTabHover) : AnyShapeStyle(.scoutCard), in: shape)
+            .background(.scoutCard, in: shape)
+            .overlay(shape.fill(Color.primary.opacity(isPressed ? 0.05 : 0)))
             .overlay(shape.strokeBorder(.scoutSeparator, lineWidth: 1))
             .overlay(
-                shape.strokeBorder(.scoutFocus, lineWidth: 2)
+                shape.strokeBorder(.tint, lineWidth: 2)
                     .opacity(isHighlighted ? 1 : 0)
             )
             .contentShape(shape)
@@ -356,7 +354,7 @@ struct ScoutPillPicker<Value: Hashable & Identifiable>: View {
     }
 }
 
-/// An icon in the theme color followed by a line of detail, as in ftcscout's event header.
+/// An icon in the accent color followed by a line of detail, as in ftcscout's event header.
 struct ScoutInfoRow<Content: View>: View {
     let systemImage: String
     @ViewBuilder let content: Content
@@ -365,7 +363,7 @@ struct ScoutInfoRow<Content: View>: View {
         HStack(spacing: 6) {
             Image(systemName: systemImage)
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.scoutTheme)
+                .foregroundStyle(.tint)
                 .frame(width: 16)
                 .accessibilityHidden(true)
             content

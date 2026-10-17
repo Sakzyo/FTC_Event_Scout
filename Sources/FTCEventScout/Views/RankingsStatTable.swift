@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// One column of the Rankings stat table. Columns are grouped by color, as on ftcscout.org:
-/// identity in white, match results in green, OPR estimates in purple, and history in blue.
+/// identity in white, match results and history in blue, and OPR estimates in red.
 enum RankingColumn: Hashable, Identifiable {
     case order
     case eventRank
@@ -67,10 +67,10 @@ enum RankingColumn: Hashable, Identifiable {
     var color: ScoutStatColor {
         switch self {
         case .order, .eventRank, .team, .tags: .white
-        case .record, .played, .rookieYear: .green
+        case .record, .played, .rookieYear: .blue
         case .metric(.highestOPR): .blue
         case .bestSeason: .lightBlue
-        case .metric, .seasonOPR: .purple
+        case .metric, .seasonOPR: .red
         }
     }
 
@@ -235,7 +235,7 @@ struct RankingColumnLayout: Equatable {
 // MARK: - Table
 
 /// The ftcscout-style stats table: color-grouped columns, a pinned sortable header,
-/// zebra rows, and a purple outline on the hovered row. Clicking a row opens match history.
+/// zebra rows, and an accent outline on the hovered row. Clicking a row opens match history.
 struct RankingsStatTable: View {
     @Bindable var model: AppModel
     let event: EventData
@@ -493,7 +493,7 @@ struct RankingStatRow: View {
 
     private var hoverOutline: some View {
         Rectangle()
-            .strokeBorder(.scoutFocus, lineWidth: 2)
+            .strokeBorder(.tint, lineWidth: 2)
             .opacity(isHovering ? 1 : 0)
             .allowsHitTesting(false)
     }
@@ -540,6 +540,7 @@ private struct RankingCellView: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(verbatim: number.teamNumberText)
                     .font(.scoutNumeric(size: 13, weight: .semibold))
+                    .foregroundStyle(.tint)
                 if !name.isEmpty {
                     Text(verbatim: name)
                         .font(.system(size: 11.5))
@@ -599,7 +600,7 @@ private struct TeamTagsTableCell: View {
                     TeamTagsSummaryView(tags: tags)
                 }
                 Image(systemName: "plus.circle")
-                    .foregroundStyle(isHovering ? AnyShapeStyle(.scoutTheme) : AnyShapeStyle(.quaternary))
+                    .foregroundStyle(isHovering ? AnyShapeStyle(.tint) : AnyShapeStyle(.quaternary))
             }
             .frame(maxWidth: .infinity, minHeight: 22, alignment: .leading)
             .contentShape(Rectangle())

@@ -2,7 +2,7 @@ import Charts
 import SwiftUI
 
 /// The Rankings tab in ftcscout.org's style: a tabbed stats card beside an OPR leaders card,
-/// both resting on a soft gray page.
+/// both on the window's native background.
 struct RankingsView: View {
     @Bindable var model: AppModel
     let event: EventData
@@ -201,7 +201,7 @@ struct OPRMetricChartButton: View {
                         .foregroundStyle(.scoutSecondaryText)
                     Image(systemName: "arrow.up.left.and.arrow.down.right")
                         .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(.scoutTheme)
+                        .foregroundStyle(.tertiary)
                         .accessibilityHidden(true)
                 }
 
@@ -324,6 +324,7 @@ struct OPRLeaderReadout: View {
                                 .frame(width: 7, height: 7)
                             Text(verbatim: "Team \(leader.teamLabel)")
                                 .font(.scoutNumeric(size: 12, weight: .semibold))
+                                .foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -461,14 +462,14 @@ private struct OPRBarChart: View {
         .chartXAxis {
             AxisMarks(position: .bottom, values: .automatic(desiredCount: desiredTickCount)) { value in
                 AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
-                    .foregroundStyle(Color.primary.opacity(0.12))
+                    .foregroundStyle(Color.primary.opacity(0.18))
                 // Explicit colors: hierarchical styles inside Charts derive from the accent tint.
                 // fixedSize keeps the tick on the plot's trailing edge from truncating to "…".
                 AxisValueLabel {
                     if let number = value.as(Double.self) {
                         Text(number, format: .number.precision(.fractionLength(0...1)))
                             .font(.scoutNumeric(size: 9))
-                            .foregroundStyle(Color.primary.opacity(0.5))
+                            .foregroundStyle(Color.primary.opacity(0.45))
                             .fixedSize()
                     }
                 }
@@ -478,7 +479,7 @@ private struct OPRBarChart: View {
             AxisMarks(position: .leading) {
                 AxisValueLabel()
                     .font(.scoutNumeric(size: 10.5, weight: .semibold))
-                    .foregroundStyle(Color.primary.opacity(0.75))
+                    .foregroundStyle(Color.primary.opacity(0.7))
             }
         }
         .chartLegend(.hidden)

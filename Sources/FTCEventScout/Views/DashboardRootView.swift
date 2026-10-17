@@ -117,7 +117,7 @@ private struct DashboardDetail: View {
                 EmptyDashboardView(loadState: model.eventLoadState, retry: model.refreshEvent)
             }
         }
-        .background(model.currentEvent == nil ? AnyShapeStyle(.background) : AnyShapeStyle(.scoutPage))
+        .background(.background)
         .navigationTitle(model.currentEvent?.eventCode ?? "Event")
     }
 }
