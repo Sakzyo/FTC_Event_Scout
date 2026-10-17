@@ -93,6 +93,85 @@ final class RankingStatTableTests: XCTestCase {
         XCTAssertEqual(RankingColumn.metric(.autoOPR).sortField, .autoOPR)
     }
 
+    // MARK: Scale bars
+
+    func testScaleBarsSizeTheSortedColumnAgainstItsLargestValue() throws {
+        let rows: [RankedStanding] = [
+            RankedStanding(order: 1, team: standing(100, total: 80)),
+            RankedStanding(order: 2, team: standing(200, total: 40)),
+            RankedStanding(order: 3, team: standing(300, total: -5)),
+            RankedStanding(order: 4, team: standing(400)),
+        ]
+        let scale = try XCTUnwrap(RankingColumnScale(
+            sortField: .totalOPR,
+            columns: RankingColumn.live(sortField: .totalOPR),
+            rows: rows,
+            records: [:],
+            metrics: [:]
+        ))
+
+        XCTAssertEqual(scale.column, .metric(.totalOPR))
+        XCTAssertEqual(scale.fraction(for: .decimal(80)), 1)
+        XCTAssertEqual(scale.fraction(for: .decimal(40)), 0.5)
+        XCTAssertEqual(scale.fraction(for: .decimal(-5)), 0)
+        XCTAssertEqual(scale.fraction(for: .decimal(nil)), 0)
+        XCTAssertEqual(scale.fraction(for: .decimal(.nan)), 0)
+    }
+
+    func testRecordScaleBarsFollowWinRate() throws {
+        let rows: [RankedStanding] = [
+            RankedStanding(order: 1, team: standing(100)),
+            RankedStanding(order: 2, team: standing(200)),
+        ]
+        let records: [Int: TeamEventRecord] = [
+            100: TeamEventRecord(wins: 4, losses: 0, ties: 0),
+            200: TeamEventRecord(wins: 1, losses: 3, ties: 0),
+        ]
+        let scale = try XCTUnwrap(RankingColumnScale(
+            sortField: .record,
+            columns: RankingColumn.live(sortField: .record),
+            rows: rows,
+            records: records,
+            metrics: [:]
+        ))
+
+        XCTAssertEqual(scale.fraction(for: .record(records[100])), 1)
+        XCTAssertEqual(scale.fraction(for: .record(records[200])), 0.25)
+        XCTAssertEqual(scale.fraction(for: .record(nil)), 0)
+    }
+
+    func testIdentifierSortsDrawNoScaleBars() {
+        let rows: [RankedStanding] = [RankedStanding(order: 1, team: standing(100, total: 50))]
+        let sorts: [RankingSortField] = [.storedRank, .teamNumber, .teamName]
+
+        for sortField in sorts {
+            let scale = RankingColumnScale(
+                sortField: sortField,
+                columns: RankingColumn.live(sortField: sortField),
+                rows: rows,
+                records: [:],
+                metrics: [:]
+            )
+            XCTAssertNil(scale, "\(sortField)")
+        }
+        XCTAssertFalse(RankingColumn.rookieYear.showsScaleBar)
+        XCTAssertFalse(RankingColumn.bestSeason.showsScaleBar)
+        XCTAssertTrue(RankingColumn.metric(.highestOPR).showsScaleBar)
+    }
+
+    func testScaleWithoutPositiveValuesDrawsEmptyTracks() throws {
+        let rows: [RankedStanding] = [RankedStanding(order: 1, team: standing(100, total: -3))]
+        let scale = try XCTUnwrap(RankingColumnScale(
+            sortField: .totalOPR,
+            columns: RankingColumn.live(sortField: .totalOPR),
+            rows: rows,
+            records: [:],
+            metrics: [:]
+        ))
+
+        XCTAssertEqual(scale.fraction(for: .decimal(2)), 0)
+    }
+
     // MARK: Layout
 
     func testLayoutFillsWideViewportsWithoutWideningThePosition() {

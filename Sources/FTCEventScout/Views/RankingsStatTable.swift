@@ -121,6 +121,14 @@ enum RankingColumn: Hashable, Identifiable {
 
     var isFlexible: Bool { self != .order && self != .tags }
 
+    /// Magnitude columns draw a scale bar under each cell while they're the sort column.
+    var showsScaleBar: Bool {
+        switch self {
+        case .record, .played, .metric, .seasonOPR: true
+        default: false
+        }
+    }
+
     var alignment: Alignment {
         self == .team || self == .tags ? .leading : .center
     }
@@ -205,6 +213,48 @@ enum RankingCellValue: Equatable {
         case .count(let count): String(count)
         }
     }
+
+    /// The quantity a scale bar measures. Records use their win rate, which is what they sort by.
+    var magnitude: Double? {
+        switch self {
+        case .decimal(let value): value
+        case .record(let record): record?.winRate
+        case .count(let count): Double(count)
+        default: nil
+        }
+    }
+}
+
+/// Sizes the scale bars of the sorted column against that column's largest value.
+struct RankingColumnScale: Equatable {
+    let column: RankingColumn
+    private let maximum: Double
+
+    init?(
+        sortField: RankingSortField,
+        columns: [RankingColumn],
+        rows: [RankedStanding],
+        records: [Int: TeamEventRecord],
+        metrics: [Int: TeamOPRcMetric]
+    ) {
+        guard let column = columns.first(where: { $0.sortField == sortField }),
+              column.showsScaleBar else {
+            return nil
+        }
+        self.column = column
+        maximum = rows
+            .compactMap { column.value(for: $0, records: records, metrics: metrics).magnitude }
+            .filter(\.isFinite)
+            .max() ?? 0
+    }
+
+    /// The bar length from 0 to 1. Negative and unavailable values get an empty track.
+    func fraction(for value: RankingCellValue) -> Double {
+        guard let magnitude = value.magnitude, magnitude.isFinite, magnitude > 0, maximum > 0 else {
+            return 0
+        }
+        return min(magnitude / maximum, 1)
+    }
 }
 
 /// Column widths that fill the available width, like ftcscout's `min-width: 100%` table.
@@ -235,7 +285,8 @@ struct RankingColumnLayout: Equatable {
 // MARK: - Table
 
 /// The ftcscout-style stats table: color-grouped columns, a pinned sortable header,
-/// zebra rows, and an accent outline on the hovered row. Clicking a row opens match history.
+/// zebra rows, scale bars under the sorted column, and an accent outline on the hovered row.
+/// Clicking a row opens match history.
 struct RankingsStatTable: View {
     @Bindable var model: AppModel
     let event: EventData
@@ -257,6 +308,14 @@ struct RankingsStatTable: View {
         let showsTeamNames = showsTeamNames
         let rowHeight: CGFloat = showsTeamNames ? 44 : 34
         let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
+        let rows = model.rankedStandings
+        let scale = RankingColumnScale(
+            sortField: model.sortField,
+            columns: columns,
+            rows: rows,
+            records: event.teamRecords,
+            metrics: event.oprcAnalysis.teamMetrics
+        )
 
         GeometryReader { proxy in
             let layout = RankingColumnLayout(
@@ -268,7 +327,7 @@ struct RankingsStatTable: View {
             ScrollView([.horizontal, .vertical]) {
                 LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
                     Section {
-                        ForEach(model.rankedStandings) { row in
+                        ForEach(rows) { row in
                             RankingStatRow(
                                 row: row,
                                 columns: columns,
@@ -277,6 +336,7 @@ struct RankingsStatTable: View {
                                 records: event.teamRecords,
                                 metrics: event.oprcAnalysis.teamMetrics,
                                 sortField: model.sortField,
+                                scale: scale,
                                 tags: model.tags(eventCode: event.eventCode, teamNumber: row.team.teamNumber),
                                 showMatches: {
                                     present(.matches(eventCode: event.eventCode, teamNumber: row.team.teamNumber))
@@ -303,7 +363,7 @@ struct RankingsStatTable: View {
         .clipShape(shape)
         .overlay(shape.strokeBorder(.scoutSeparator, lineWidth: 1))
         .overlay {
-            if model.rankedStandings.isEmpty {
+            if rows.isEmpty {
                 ContentUnavailableView(
                     "No Teams",
                     systemImage: "person.3",
@@ -437,6 +497,7 @@ struct RankingStatRow: View {
     let records: [Int: TeamEventRecord]
     let metrics: [Int: TeamOPRcMetric]
     let sortField: RankingSortField
+    let scale: RankingColumnScale?
     let tags: [TeamTag]
     let showMatches: () -> Void
     let editTags: () -> Void
@@ -484,6 +545,17 @@ struct RankingStatRow: View {
         )
         .padding(.horizontal, column.horizontalInset)
         .frame(width: layout.width(for: column), height: rowHeight, alignment: column.alignment)
+        .overlay {
+            if let scale, scale.column == column {
+                // Offset from the cell's center so values keep their baseline across the row.
+                ScoutScaleBar(
+                    fraction: scale.fraction(for: value),
+                    width: max(layout.width(for: column) - 24, 12),
+                    tone: column.color.tone
+                )
+                .offset(y: 11.5)
+            }
+        }
         .background {
             if let tint {
                 Rectangle().fill(tint)

@@ -56,7 +56,8 @@ enum ScoutStatColor: Hashable {
     case blue
     case lightBlue
 
-    private var tone: ScoutColor? {
+    /// The solid group color; nil for identity columns.
+    var tone: ScoutColor? {
         switch self {
         case .white: nil
         case .red: ScoutColor((244, 67, 54), (204, 47, 47))
@@ -82,6 +83,37 @@ extension Font {
     /// System text with tabular digits, so numbers line up down a column.
     static func scoutNumeric(size: CGFloat, weight: Font.Weight = .regular) -> Font {
         .system(size: size, weight: weight).monospacedDigit()
+    }
+}
+
+/// A thin magnitude bar under each cell of the sorted column: a faint track with a fill
+/// scaled to the column leader. The fill brightens toward its tip, where the eye should land.
+struct ScoutScaleBar: View {
+    let fraction: Double
+    let width: CGFloat
+    /// The column's group color; identity columns fall back to the accent color.
+    let tone: ScoutColor?
+
+    var body: some View {
+        // The vivid light-scheme tone in both schemes; dark tones vanish into dark cell tints.
+        let color = tone?.light ?? .accentColor
+        ZStack(alignment: .leading) {
+            Capsule()
+                .fill(Color.primary.opacity(0.08))
+            if fraction > 0 {
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: [color.opacity(0.4), color],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: max(width * min(fraction, 1), 3))
+            }
+        }
+        .frame(width: width, height: 3)
+        .accessibilityHidden(true)
     }
 }
 
