@@ -65,7 +65,13 @@ private struct MatchHistoryContent: View {
                         }
                     }
                 } header: {
-                    Text("\(matches.count) matches at \(eventCode)")
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("\(matches.count) matches at \(eventCode)")
+                        Spacer()
+                        if !matches.isEmpty {
+                            MatchRecordSummary(matches: matches, teamNumber: teamNumber)
+                        }
+                    }
                 }
             }
             .listStyle(.inset)
@@ -155,6 +161,39 @@ private struct MetricCount: View {
     }
 }
 
+private struct MatchRecordSummary: View {
+    let wins: Int
+    let losses: Int
+    let ties: Int
+
+    init(matches: [MatchRecord], teamNumber: Int) {
+        let outcomes = matches.map { $0.outcome(for: teamNumber) }
+        wins = outcomes.filter { $0 == .win }.count
+        losses = outcomes.filter { $0 == .loss }.count
+        ties = outcomes.filter { $0 == .tie }.count
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            count(wins, label: "W", color: .green)
+            count(losses, label: "L", color: .red)
+            count(ties, label: "T", color: .orange)
+        }
+        .font(.callout.monospacedDigit().weight(.semibold))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Record: \(wins) wins, \(losses) losses, \(ties) ties")
+    }
+
+    private func count(_ value: Int, label: String, color: Color) -> some View {
+        HStack(spacing: 2) {
+            Text(value.formatted())
+                .foregroundStyle(value > 0 ? AnyShapeStyle(color) : AnyShapeStyle(.tertiary))
+            Text(label)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
 private struct MatchCardView: View {
     @Bindable var model: AppModel
     let eventCode: String
@@ -163,7 +202,7 @@ private struct MatchCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .center) {
                 Text(match.displayTitle)
                     .font(.headline)
                 Spacer()
@@ -171,24 +210,20 @@ private struct MatchCardView: View {
             }
 
             HStack(alignment: .top, spacing: 12) {
-                AlliancePanelView(
-                    model: model,
-                    eventCode: eventCode,
-                    selectedTeam: selectedTeam,
-                    color: .red,
-                    teams: match.redTeams,
-                    score: match.redScore.finalScore,
-                    nonPenaltyScore: match.nonPenaltyScore(for: .red)
-                )
-                AlliancePanelView(
-                    model: model,
-                    eventCode: eventCode,
-                    selectedTeam: selectedTeam,
-                    color: .blue,
-                    teams: match.blueTeams,
-                    score: match.blueScore.finalScore,
-                    nonPenaltyScore: match.nonPenaltyScore(for: .blue)
-                )
+                ForEach([AllianceColor.red, .blue], id: \.self) { alliance in
+                    AlliancePanelView(
+                        model: model,
+                        eventCode: eventCode,
+                        selectedTeam: selectedTeam,
+                        color: alliance,
+                        teams: alliance == .red ? match.redTeams : match.blueTeams,
+                        score: alliance == .red
+                            ? match.redScore.finalScore
+                            : match.blueScore.finalScore,
+                        nonPenaltyScore: match.nonPenaltyScore(for: alliance),
+                        result: match.result(for: alliance)
+                    )
+                }
             }
 
             ScoreBreakdownDisclosure(match: match)
@@ -200,17 +235,19 @@ private struct MatchCardView: View {
 private struct ScoreBreakdownDisclosure: View {
     let match: MatchRecord
     @State private var isExpanded = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Button {
-                withAnimation(.easeInOut(duration: 0.18)) {
+                withAnimation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.22)) {
                     isExpanded.toggle()
                 }
             } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                    Image(systemName: "chevron.right")
                         .font(.caption.weight(.semibold))
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
                         .frame(width: 12)
                         .accessibilityHidden(true)
                     Text("Score Breakdown")
@@ -224,7 +261,11 @@ private struct ScoreBreakdownDisclosure: View {
             if isExpanded {
                 ScoreBreakdownGrid(match: match)
                     .frame(maxWidth: .infinity, alignment: .center)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .transition(
+                        reduceMotion
+                            ? .opacity
+                            : .opacity.combined(with: .offset(y: -6))
+                    )
             }
         }
     }
@@ -236,18 +277,32 @@ private struct MatchOutcomeView: View {
     var body: some View {
         switch outcome {
         case .win:
-            Label("Win", systemImage: "checkmark.circle.fill")
-                .foregroundStyle(.green)
+            StatusPill(title: "Win", systemImage: "checkmark.circle.fill", tint: .green)
         case .loss:
-            Label("Loss", systemImage: "xmark.circle.fill")
-                .foregroundStyle(.red)
+            StatusPill(title: "Loss", systemImage: "xmark.circle.fill", tint: .red)
         case .tie:
-            Label("Tie", systemImage: "equal.circle.fill")
-                .foregroundStyle(.orange)
+            StatusPill(title: "Tie", systemImage: "equal.circle.fill", tint: .orange)
         case .unavailable:
             Label("Unavailable", systemImage: "questionmark.circle")
                 .foregroundStyle(.secondary)
         }
+    }
+}
+
+private enum AllianceResult {
+    case won
+    case lost
+    case tied
+    case unavailable
+}
+
+private extension MatchRecord {
+    func result(for alliance: AllianceColor) -> AllianceResult {
+        guard let red = redScore.finalScore, let blue = blueScore.finalScore else {
+            return .unavailable
+        }
+        if red == blue { return .tied }
+        return (red > blue) == (alliance == .red) ? .won : .lost
     }
 }
 
@@ -259,34 +314,49 @@ private struct AlliancePanelView: View {
     let teams: [Int]
     let score: Double?
     let nonPenaltyScore: Double?
+    let result: AllianceResult
 
     var body: some View {
-        GroupBox {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .firstTextBaseline) {
-                    NumericValueView(value: score, fractionDigits: 0)
-                        .font(.title.weight(.semibold))
-                        .monospacedDigit()
-                        .foregroundStyle(color.scoreColor)
-                    if let nonPenaltyScore {
-                        HStack(alignment: .firstTextBaseline, spacing: 3) {
-                            Text("np")
-                                .foregroundStyle(.secondary)
-                            Text(nonPenaltyScore, format: .number.precision(.fractionLength(0)))
-                                .foregroundStyle(color.scoreColor)
-                        }
-                        .font(.caption.monospacedDigit())
-                    }
-                    Spacer()
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(color.displayName, systemImage: "circle.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(color.displayColor)
+                Spacer()
+                if result == .won {
+                    Label("Winner", systemImage: "trophy.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(color.displayColor)
                 }
+            }
 
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                NumericValueView(value: score, fractionDigits: 0)
+                    .font(.system(.largeTitle, design: .rounded, weight: result == .won ? .bold : .medium))
+                    .foregroundStyle(color.displayColor)
+                    .opacity(result == .lost ? 0.65 : 1)
+                if let nonPenaltyScore {
+                    HStack(alignment: .firstTextBaseline, spacing: 3) {
+                        Text(nonPenaltyScore, format: .number.precision(.fractionLength(0)))
+                            .monospacedDigit()
+                        Text("without penalties")
+                    }
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
                 ForEach(teams, id: \.self) { teamNumber in
+                    let isSelected = teamNumber == selectedTeam
                     HStack(spacing: 8) {
-                        Image(systemName: teamNumber == selectedTeam ? "scope" : "circle")
-                            .foregroundStyle(teamNumber == selectedTeam ? .primary : .tertiary)
+                        Image(systemName: isSelected ? "scope" : "circle")
+                            .foregroundStyle(isSelected ? AnyShapeStyle(color.displayColor) : AnyShapeStyle(.tertiary))
                             .accessibilityHidden(true)
                         Text("Team \(teamNumber.teamNumberText)")
-                            .fontWeight(teamNumber == selectedTeam ? .semibold : .regular)
+                            .monospacedDigit()
+                            .fontWeight(isSelected ? .semibold : .regular)
                         TeamTagsSummaryView(
                             tags: model.tags(eventCode: eventCode, teamNumber: teamNumber)
                         )
@@ -295,16 +365,21 @@ private struct AlliancePanelView: View {
                     .accessibilityElement(children: .combine)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(3)
-        } label: {
-            Label(
-                color == .red ? "Red Alliance" : "Blue Alliance",
-                systemImage: "circle.fill"
-            )
-            .foregroundStyle(color == .red ? .red : .blue)
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .alliancePanelBackground(color, outlined: teams.contains(selectedTeam))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(accessibilitySummary)
+    }
+
+    private var accessibilitySummary: String {
+        switch result {
+        case .won: "\(color.displayName), winner"
+        case .lost: "\(color.displayName), lost"
+        case .tied: "\(color.displayName), tied"
+        case .unavailable: color.displayName
+        }
     }
 }
 
@@ -316,26 +391,32 @@ private struct ScoreBreakdownGrid: View {
     }
 
     var body: some View {
-        Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 7) {
+        Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
             GridRow {
                 Text("Category")
-                    .font(.caption.weight(.semibold))
+                    .breakdownCell(alignment: .leading)
                 Text("Red")
-                    .font(.caption.weight(.semibold))
                     .foregroundStyle(.red)
+                    .breakdownCell(alignment: .trailing)
                     .gridColumnAlignment(.trailing)
                 Text("Blue")
-                    .font(.caption.weight(.semibold))
                     .foregroundStyle(.blue)
+                    .breakdownCell(alignment: .trailing)
                     .gridColumnAlignment(.trailing)
             }
+            .font(.caption.weight(.semibold))
+            .textCase(.uppercase)
+
             Divider()
                 .gridCellUnsizedAxes(.horizontal)
-            ForEach(rows) { row in
-                if row.emphasized, row.id != rows.first?.id {
+
+            ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                if row.emphasized, index != 0 {
                     Divider()
                         .gridCellUnsizedAxes(.horizontal)
                 }
+                let isStriped = index.isMultiple(of: 2)
+                let leader = row.leadingAlliance
                 GridRow {
                     Text(row.label)
                         .font(row.usesBoldValue ? .title3 : .body)
@@ -345,22 +426,53 @@ private struct ScoreBreakdownGrid: View {
                                 : (row.emphasized ? .semibold : .regular)
                         )
                         .padding(.leading, CGFloat(row.indent) * 14)
+                        .breakdownCell(alignment: .leading, isStriped: isStriped)
                     BreakdownValueView(
                         value: row.redValue,
                         alliance: .red,
                         usesDecodePatternColors: row.usesDecodePatternColors,
-                        isBold: row.usesBoldValue
+                        isBold: row.usesBoldValue,
+                        comparison: .init(alliance: .red, leader: leader)
                     )
+                    .breakdownCell(alignment: .trailing, isStriped: isStriped)
                     BreakdownValueView(
                         value: row.blueValue,
                         alliance: .blue,
                         usesDecodePatternColors: row.usesDecodePatternColors,
-                        isBold: row.usesBoldValue
+                        isBold: row.usesBoldValue,
+                        comparison: .init(alliance: .blue, leader: leader)
                     )
+                    .breakdownCell(alignment: .trailing, isStriped: isStriped)
                 }
             }
         }
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .frame(maxWidth: 680, alignment: .leading)
+    }
+}
+
+private extension View {
+    /// Pads a breakdown cell and fills its whole grid cell so zebra stripes form continuous rows.
+    func breakdownCell(alignment: Alignment, isStriped: Bool = false) -> some View {
+        padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
+            .background(isStriped ? Color.primary.opacity(0.05) : Color.clear)
+    }
+}
+
+/// How one alliance's value compares with the other alliance's value in the same row.
+private enum BreakdownComparison {
+    case higher
+    case lower
+    case even
+
+    init(alliance: AllianceColor, leader: AllianceColor?) {
+        guard let leader else {
+            self = .even
+            return
+        }
+        self = leader == alliance ? .higher : .lower
     }
 }
 
@@ -369,6 +481,7 @@ private struct BreakdownValueView: View {
     let alliance: AllianceColor
     let usesDecodePatternColors: Bool
     let isBold: Bool
+    let comparison: BreakdownComparison
 
     var body: some View {
         Group {
@@ -381,11 +494,18 @@ private struct BreakdownValueView: View {
         }
         .font(isBold ? .title : .title3)
         .monospacedDigit()
-        .fontWeight(isBold ? .bold : .regular)
+        .fontWeight(fontWeight)
+        .opacity(comparison == .lower ? 0.6 : 1)
         .lineLimit(1)
         .minimumScaleFactor(0.75)
         .frame(maxWidth: .infinity, alignment: .trailing)
         .accessibilityLabel(value ?? "Unavailable")
+        .accessibilityValue(comparison == .higher ? "Higher" : "")
+    }
+
+    private var fontWeight: Font.Weight {
+        if isBold { return .bold }
+        return comparison == .higher ? .semibold : .regular
     }
 
     private var styledValue: AttributedString {
@@ -401,13 +521,13 @@ private struct BreakdownValueView: View {
             case .standard:
                 break
             case .alliance:
-                fragment.foregroundColor = alliance.scoreColor
+                fragment.foregroundColor = alliance.displayColor
             case .decodeGreen:
                 fragment.foregroundColor = .green
             case .decodePurple:
                 fragment.foregroundColor = .purple
             case .decodeNone:
-                fragment.foregroundColor = .white
+                fragment.foregroundColor = .primary
             }
             result.append(fragment)
         }
@@ -425,6 +545,26 @@ struct BreakdownRow: Identifiable {
 
     var usesDecodePatternColors: Bool {
         id == "auto-classifier" || id == "teleop-classifier"
+    }
+
+    /// The alliance with the strictly higher single numeric value in this row, if any.
+    /// Multi-part values such as "3 / 2" or location names are never compared.
+    var leadingAlliance: AllianceColor? {
+        guard let red = Self.numericValue(redValue),
+              let blue = Self.numericValue(blueValue),
+              red != blue else {
+            return nil
+        }
+        return red > blue ? .red : .blue
+    }
+
+    private static func numericValue(_ value: String?) -> Double? {
+        guard let value,
+              let number = Double(value.trimmingCharacters(in: .whitespacesAndNewlines)),
+              number.isFinite else {
+            return nil
+        }
+        return number
     }
 
     var usesBoldValue: Bool {
@@ -512,11 +652,5 @@ struct BreakdownRow: Identifiable {
                 return abbreviations[state.lowercased()] ?? state
             }
             .joined(separator: " / ")
-    }
-}
-
-private extension AllianceColor {
-    var scoreColor: Color {
-        self == .red ? .red : .blue
     }
 }

@@ -165,12 +165,9 @@ private struct ManualAllianceInput: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
-            Label(
-                alliance == .red ? "Red Alliance" : "Blue Alliance",
-                systemImage: "circle.fill"
-            )
-            .font(.headline)
-            .foregroundStyle(alliance == .red ? .red : .blue)
+            Label(alliance.displayName, systemImage: "circle.fill")
+                .font(.headline)
+                .foregroundStyle(alliance.displayColor)
 
             Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 8) {
                 GridRow {
@@ -191,7 +188,7 @@ private struct ManualAllianceInput: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
-        .background(.quaternary, in: RoundedRectangle(cornerRadius: 9))
+        .alliancePanelBackground(alliance)
     }
 
     private var allianceName: String {
@@ -309,14 +306,21 @@ private struct MatchPredictionCard: View {
                         alliance: .red,
                         teamNumbers: prediction.redTeams,
                         predictedScore: prediction.predictedRedScore,
-                        teamMetrics: teamMetrics
+                        teamMetrics: teamMetrics,
+                        standing: standing(for: .red)
                     )
                     PredictionAlliancePanel(
                         alliance: .blue,
                         teamNumbers: prediction.blueTeams,
                         predictedScore: prediction.predictedBlueScore,
-                        teamMetrics: teamMetrics
+                        teamMetrics: teamMetrics,
+                        standing: standing(for: .blue)
                     )
+                }
+
+                if let red = prediction.predictedRedScore,
+                   let blue = prediction.predictedBlueScore {
+                    PredictedScoreSplitBar(redScore: red, blueScore: blue)
                 }
 
                 Divider()
@@ -337,6 +341,56 @@ private struct MatchPredictionCard: View {
             }
         }
     }
+
+    private func standing(for alliance: AllianceColor) -> PredictedStanding {
+        switch prediction.predictedWinner {
+        case .red: alliance == .red ? .favored : .underdog
+        case .blue: alliance == .blue ? .favored : .underdog
+        case .tie, nil: .even
+        }
+    }
+}
+
+private enum PredictedStanding {
+    case favored
+    case underdog
+    case even
+}
+
+/// Visualizes how the predicted points divide between the two alliances.
+private struct PredictedScoreSplitBar: View {
+    let redScore: Double
+    let blueScore: Double
+
+    var body: some View {
+        let red = max(redScore, 0)
+        let blue = max(blueScore, 0)
+        let total = red + blue
+        if total > 0 {
+            let redFraction = red / total
+            GeometryReader { proxy in
+                let available = max(proxy.size.width - 2, 0)
+                HStack(spacing: 2) {
+                    Capsule()
+                        .fill(AllianceColor.red.displayColor)
+                        .frame(width: available * redFraction)
+                    Capsule()
+                        .fill(AllianceColor.blue.displayColor)
+                }
+            }
+            .frame(height: 6)
+            .help("Share of predicted points")
+            .accessibilityElement()
+            .accessibilityLabel("Share of predicted points")
+            .accessibilityValue(
+                "Red \(percent(redFraction)), Blue \(percent(1 - redFraction))"
+            )
+        }
+    }
+
+    private func percent(_ fraction: Double) -> String {
+        fraction.formatted(.percent.precision(.fractionLength(0)))
+    }
 }
 
 private struct PredictionAlliancePanel: View {
@@ -344,20 +398,27 @@ private struct PredictionAlliancePanel: View {
     let teamNumbers: [Int]
     let predictedScore: Double?
     let teamMetrics: [Int: TeamOPRcMetric]
+    let standing: PredictedStanding
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
-            Label(
-                alliance == .red ? "Red Alliance" : "Blue Alliance",
-                systemImage: "circle.fill"
-            )
-            .font(.headline)
-            .foregroundStyle(alliance == .red ? .red : .blue)
+            HStack(alignment: .firstTextBaseline) {
+                Label(alliance.displayName, systemImage: "circle.fill")
+                    .font(.headline)
+                    .foregroundStyle(alliance.displayColor)
+                Spacer()
+                if standing == .favored {
+                    Text("Favored")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(alliance.displayColor)
+                }
+            }
 
             ForEach(teamNumbers, id: \.self) { teamNumber in
-                HStack {
+                HStack(alignment: .firstTextBaseline) {
                     Text("Team \(teamNumber.teamNumberText)")
                         .font(.callout.weight(.medium))
+                        .monospacedDigit()
                     Spacer()
                     Text("OPRc")
                         .font(.caption)
@@ -385,13 +446,25 @@ private struct PredictionAlliancePanel: View {
                     .foregroundStyle(.secondary)
                 Spacer()
                 NumericValueView(value: predictedScore, fractionDigits: 1)
-                    .font(.title2.monospacedDigit().weight(.semibold))
-                    .foregroundStyle(alliance == .red ? .red : .blue)
+                    .font(
+                        .system(
+                            .title,
+                            design: .rounded,
+                            weight: standing == .favored ? .bold : .medium
+                        )
+                    )
+                    .monospacedDigit()
+                    .foregroundStyle(alliance.displayColor)
+                    .opacity(standing == .underdog ? 0.65 : 1)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
-        .background(.quaternary, in: RoundedRectangle(cornerRadius: 9))
+        .alliancePanelBackground(alliance)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(
+            standing == .favored ? "\(alliance.displayName), favored" : alliance.displayName
+        )
     }
 }
 
@@ -408,6 +481,8 @@ private struct PredictionResultView: View {
                let margin = prediction.predictedMargin {
                 Text(winnerText(winner, margin: margin))
                     .font(.title3.weight(.semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(winnerColor(winner))
                 Text("Signed margin: \(signedMargin(margin))")
                     .font(.callout.monospacedDigit())
                     .foregroundStyle(.secondary)
@@ -427,6 +502,14 @@ private struct PredictionResultView: View {
             "Blue by \(abs(margin).formatted(.number.precision(.fractionLength(1))))"
         case .tie:
             "Predicted tie"
+        }
+    }
+
+    private func winnerColor(_ winner: PredictedMatchWinner) -> Color {
+        switch winner {
+        case .red: AllianceColor.red.displayColor
+        case .blue: AllianceColor.blue.displayColor
+        case .tie: .primary
         }
     }
 

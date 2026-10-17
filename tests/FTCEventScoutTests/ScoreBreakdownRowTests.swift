@@ -83,6 +83,28 @@ final class ScoreBreakdownRowTests: XCTestCase {
         XCTAssertEqual(boldIDs, ["total-auto", "total-teleop", "penalty", "final"])
     }
 
+    func testLeadingAllianceComparesOnlySingleNumericValues() {
+        func leader(_ red: String?, _ blue: String?) -> AllianceColor? {
+            BreakdownRow(
+                id: "row",
+                label: "Row",
+                redValue: red,
+                blueValue: blue,
+                indent: 0,
+                emphasized: false
+            ).leadingAlliance
+        }
+
+        XCTAssertEqual(leader("42", "39"), .red)
+        XCTAssertEqual(leader("7.5", " 12 "), .blue)
+        XCTAssertNil(leader("18", "18"))
+        XCTAssertNil(leader("3 / 2 / 1", "1 / 0 / 0"))
+        XCTAssertNil(leader("Full", "Partial"))
+        XCTAssertNil(leader("GPP", "PGP"))
+        XCTAssertNil(leader("12", nil))
+        XCTAssertNil(leader("nan", "4"))
+    }
+
     private func score(
         auto: Double,
         teleop: Double,

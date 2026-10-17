@@ -54,15 +54,9 @@ private struct OPRChartsPanel: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Compare OPR Leaders")
                     .font(.headline)
-                Text("Top 10 teams per metric · each chart uses its own scale")
+                Text("Top 10 per metric · independent scales · click to expand")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Label(
-                    "Click a chart to view every team",
-                    systemImage: "arrow.up.left.and.arrow.down.right"
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12)
@@ -223,12 +217,13 @@ private struct OPRBarChart: View {
                     y: .value("Team", entry.teamLabel)
                 )
                 .foregroundStyle(teamColor(for: entry.teamNumber))
+                .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
                 .annotation(
                     position: entry.value >= 0 ? .trailing : .leading,
-                    spacing: 4
+                    spacing: 5
                 ) {
                     Text(entry.value, format: .number.precision(.fractionLength(1)))
-                        .font(.caption2.monospacedDigit())
+                        .font(.caption.monospacedDigit().weight(.medium))
                         .foregroundStyle(.primary)
                 }
                 .accessibilityLabel("Team \(entry.teamLabel)")
@@ -341,27 +336,37 @@ private struct LiveRankingsTable: View {
     let present: (RankingPresentation) -> Void
 
     var body: some View {
-        Table(rows) {
-            TableColumn("Order") { row in
+        let scale = SortedColumnScale(
+            field: model.sortField,
+            values: rows.map { metricValue(model.sortField, for: $0) }
+        )
+
+        Table(rows, sortOrder: model.rankingTableSortOrder) {
+            TableColumn("#") { row in
                 Text(row.order.formatted())
                     .font(.title3)
                     .monospacedDigit()
+                    .foregroundStyle(.secondary)
             }
-            .width(min: 52, ideal: 58, max: 72)
+            .width(min: 36, ideal: 44, max: 60)
+            .alignment(.numeric)
 
-            TableColumn("Rank") { row in
+            TableColumn("Rank", sortUsing: RankingColumnComparator(.storedRank)) { row in
                 Text(row.team.storedRank.formatted())
                     .font(.title3)
                     .monospacedDigit()
+                    .fontWeight(scale.isSorted(.storedRank) ? .semibold : .regular)
             }
-            .width(min: 48, ideal: 56, max: 70)
+            .width(min: 52, ideal: 60, max: 74)
+            .alignment(.numeric)
 
-            TableColumn("Team") { row in
+            TableColumn("Team", sortUsing: RankingColumnComparator(.teamNumber)) { row in
                 Button {
                     present(.matches(eventCode: eventCode, teamNumber: row.team.teamNumber))
                 } label: {
                     Text(row.team.teamNumber.teamNumberText)
                         .font(.title3.monospacedDigit())
+                        .fontWeight(scale.isSorted(.teamNumber) ? .semibold : .regular)
                         .foregroundStyle(.tint)
                         .frame(maxWidth: .infinity, minHeight: 22, alignment: .leading)
                         .contentShape(Rectangle())
@@ -381,47 +386,53 @@ private struct LiveRankingsTable: View {
             }
             .width(min: 90, ideal: 130, max: 190)
 
-            TableColumn("OPR") { row in
-                NumericValueView(value: row.team.totalOPR, fractionDigits: 2)
-                    .font(.title3.monospacedDigit())
-            }
-            .width(min: 70, ideal: 86, max: 110)
+            metricColumn("OPR", field: .totalOPR, scale: scale)
 
-            TableColumn("OPRc") { row in
-                NumericValueView(
-                    value: teamMetrics[row.team.teamNumber]?.oprc,
-                    fractionDigits: 2
+            TableColumn("OPRc", sortUsing: RankingColumnComparator(.oprc)) { row in
+                RankingMetricCell(
+                    value: metricValue(.oprc, for: row),
+                    scale: scale,
+                    field: .oprc
                 )
-                .font(.title3.monospacedDigit())
                 .help("Calculated OPR after one residual-IQR outlier filtering pass")
             }
-            .width(min: 70, ideal: 86, max: 110)
+            .width(min: 78, ideal: 92, max: 120)
+            .alignment(.numeric)
 
-            TableColumn("npOPR") { row in
-                NumericValueView(value: row.team.nonPenaltyOPR, fractionDigits: 2)
-                    .font(.title3.monospacedDigit())
-            }
-            .width(min: 70, ideal: 86, max: 110)
-
-            TableColumn("Auto") { row in
-                NumericValueView(value: row.team.autoOPR, fractionDigits: 2)
-                    .font(.title3.monospacedDigit())
-            }
-            .width(min: 70, ideal: 86, max: 110)
-
-            TableColumn("Teleop") { row in
-                NumericValueView(value: row.team.teleopOPR, fractionDigits: 2)
-                    .font(.title3.monospacedDigit())
-            }
-            .width(min: 70, ideal: 86, max: 110)
-
-            TableColumn("Endgame") { row in
-                NumericValueView(value: row.team.endgameOPR, fractionDigits: 2)
-                    .font(.title3.monospacedDigit())
-            }
-            .width(min: 70, ideal: 86, max: 110)
+            metricColumn("npOPR", field: .nonPenaltyOPR, scale: scale)
+            metricColumn("Auto", field: .autoOPR, scale: scale)
+            metricColumn("Teleop", field: .teleopOPR, scale: scale)
+            metricColumn("Endgame", field: .endgameOPR, scale: scale)
         }
         .tableStyle(.inset)
+    }
+
+    private func metricColumn(
+        _ title: LocalizedStringKey,
+        field: RankingSortField,
+        scale: SortedColumnScale
+    ) -> some TableColumnContent<RankedStanding, RankingColumnComparator> {
+        TableColumn(title, sortUsing: RankingColumnComparator(field)) { row in
+            RankingMetricCell(
+                value: metricValue(field, for: row),
+                scale: scale,
+                field: field
+            )
+        }
+        .width(min: 78, ideal: 92, max: 120)
+        .alignment(.numeric)
+    }
+
+    private func metricValue(_ field: RankingSortField, for row: RankedStanding) -> Double? {
+        switch field {
+        case .totalOPR: row.team.totalOPR
+        case .oprc: teamMetrics[row.team.teamNumber]?.oprc
+        case .nonPenaltyOPR: row.team.nonPenaltyOPR
+        case .autoOPR: row.team.autoOPR
+        case .teleopOPR: row.team.teleopOPR
+        case .endgameOPR: row.team.endgameOPR
+        default: nil
+        }
     }
 }
 
@@ -433,23 +444,32 @@ private struct PreviewRankingsTable: View {
     let present: (RankingPresentation) -> Void
 
     var body: some View {
-        Table(rows) {
+        let scale = SortedColumnScale(
+            field: model.sortField,
+            values: model.sortField == .highestOPR ? rows.map(\.team.highestOPR) : []
+        )
+
+        Table(rows, sortOrder: model.rankingTableSortOrder) {
             TableColumn("Rank") { row in
                 Text(row.order.formatted())
                     .font(.title3)
                     .monospacedDigit()
+                    .foregroundStyle(.secondary)
             }
             .width(min: 48, ideal: 56, max: 70)
+            .alignment(.numeric)
 
-            TableColumn("Team") { row in
+            TableColumn("Team", sortUsing: RankingColumnComparator(.teamNumber)) { row in
                 Text(row.team.teamNumber.teamNumberText)
                     .font(.title3)
                     .monospacedDigit()
+                    .fontWeight(scale.isSorted(.teamNumber) ? .semibold : .regular)
             }
             .width(min: 72, ideal: 84, max: 100)
 
-            TableColumn("Team Name") { row in
+            TableColumn("Team Name", sortUsing: RankingColumnComparator(.teamName)) { row in
                 Text(row.team.teamName.isEmpty ? "—" : row.team.teamName)
+                    .fontWeight(scale.isSorted(.teamName) ? .semibold : .regular)
                     .lineLimit(1)
             }
             .width(min: 150, ideal: 210, max: 400)
@@ -463,52 +483,163 @@ private struct PreviewRankingsTable: View {
             }
             .width(min: 90, ideal: 130, max: 190)
 
-            TableColumn("Highest OPR") { row in
-                NumericValueView(value: row.team.highestOPR, fractionDigits: 2)
-                    .font(.title3.monospacedDigit())
+            TableColumn("Highest OPR", sortUsing: RankingColumnComparator(.highestOPR)) { row in
+                RankingMetricCell(value: row.team.highestOPR, scale: scale, field: .highestOPR)
             }
-            .width(min: 92, ideal: 110, max: 130)
+            .width(min: 100, ideal: 116, max: 140)
+            .alignment(.numeric)
 
-            TableColumn("Best Season") { row in
-                OptionalIntegerValue(value: row.team.bestSeason)
+            TableColumn("Best Season", sortUsing: RankingColumnComparator(.bestSeason)) { row in
+                OptionalIntegerValue(value: row.team.bestSeason, usesGrouping: false)
                     .font(.title3.monospacedDigit())
+                    .fontWeight(scale.isSorted(.bestSeason) ? .semibold : .regular)
             }
-            .width(min: 82, ideal: 96, max: 110)
+            .width(min: 92, ideal: 104, max: 120)
+            .alignment(.numeric)
 
-            TableColumn("\(season)") { row in
+            TableColumn("\(String(season))") { row in
                 NumericValueView(value: row.team.perSeason[String(season)]?.total, fractionDigits: 2)
                     .font(.title3.monospacedDigit())
             }
             .width(min: 66, ideal: 78, max: 96)
+            .alignment(.numeric)
 
-            TableColumn("\(season - 1)") { row in
+            TableColumn("\(String(season - 1))") { row in
                 NumericValueView(value: row.team.perSeason[String(season - 1)]?.total, fractionDigits: 2)
                     .font(.title3.monospacedDigit())
             }
             .width(min: 66, ideal: 78, max: 96)
+            .alignment(.numeric)
 
-            TableColumn("\(season - 2)") { row in
+            TableColumn("\(String(season - 2))") { row in
                 NumericValueView(value: row.team.perSeason[String(season - 2)]?.total, fractionDigits: 2)
                     .font(.title3.monospacedDigit())
             }
             .width(min: 66, ideal: 78, max: 96)
+            .alignment(.numeric)
 
-            TableColumn("Rookie Year") { row in
-                OptionalIntegerValue(value: row.team.rookieYear)
+            TableColumn("Rookie Year", sortUsing: RankingColumnComparator(.rookieYear)) { row in
+                OptionalIntegerValue(value: row.team.rookieYear, usesGrouping: false)
                     .font(.title3.monospacedDigit())
+                    .fontWeight(scale.isSorted(.rookieYear) ? .semibold : .regular)
             }
-            .width(min: 82, ideal: 96, max: 110)
+            .width(min: 92, ideal: 104, max: 120)
+            .alignment(.numeric)
         }
         .tableStyle(.inset)
     }
 }
 
+/// Identifies a sortable ranking column. Rows arrive already sorted by `AppModel`,
+/// so the comparator only preserves that order; Table uses it for header state.
+struct RankingColumnComparator: SortComparator, Hashable {
+    let field: RankingSortField
+    var order: SortOrder
+
+    init(_ field: RankingSortField, order: SortOrder? = nil) {
+        self.field = field
+        self.order = order ?? field.defaultTableSortOrder
+    }
+
+    func compare(_ lhs: RankedStanding, _ rhs: RankedStanding) -> ComparisonResult {
+        if lhs.order == rhs.order { return .orderedSame }
+        return lhs.order < rhs.order ? .orderedAscending : .orderedDescending
+    }
+}
+
+extension RankingSortField {
+    /// The direction a column sorts in when its header is first clicked:
+    /// identifiers ascend, performance metrics put the strongest teams first.
+    var defaultTableSortOrder: SortOrder {
+        switch self {
+        case .storedRank, .teamNumber, .teamName, .rookieYear: .forward
+        case .totalOPR, .oprc, .nonPenaltyOPR, .autoOPR, .teleopOPR, .endgameOPR,
+             .highestOPR, .bestSeason: .reverse
+        }
+    }
+}
+
+extension AppModel {
+    var rankingTableSortOrder: Binding<[RankingColumnComparator]> {
+        Binding {
+            [RankingColumnComparator(
+                self.sortField,
+                order: self.sortDirection == .ascending ? .forward : .reverse
+            )]
+        } set: { newValue in
+            guard let comparator = newValue.first else { return }
+            let direction: SortDirection = comparator.order == .forward ? .ascending : .descending
+            if self.sortField != comparator.field {
+                self.sortField = comparator.field
+            }
+            if self.sortDirection != direction {
+                self.sortDirection = direction
+            }
+        }
+    }
+}
+
+/// Scales the actively sorted metric so its cells can show an in-cell magnitude bar.
+struct SortedColumnScale {
+    let field: RankingSortField
+    private let maximum: Double
+
+    init(field: RankingSortField, values: [Double?]) {
+        self.field = field
+        maximum = values.compactMap { $0 }.filter(\.isFinite).max() ?? 0
+    }
+
+    func isSorted(_ candidate: RankingSortField) -> Bool {
+        candidate == field
+    }
+
+    /// The bar length from 0 to 1. Negative and unavailable values have no bar.
+    func fraction(for value: Double?, in candidate: RankingSortField) -> Double {
+        guard candidate == field,
+              let value,
+              value.isFinite,
+              value > 0,
+              maximum > 0 else {
+            return 0
+        }
+        return min(value / maximum, 1)
+    }
+}
+
+private struct RankingMetricCell: View {
+    let value: Double?
+    let scale: SortedColumnScale
+    let field: RankingSortField
+
+    var body: some View {
+        let isSorted = scale.isSorted(field)
+        let fraction = scale.fraction(for: value, in: field)
+
+        NumericValueView(value: value, fractionDigits: 2)
+            .font(.title3.monospacedDigit())
+            .fontWeight(isSorted ? .semibold : .regular)
+            .padding(.horizontal, 5)
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            .background(alignment: .leading) {
+                if fraction > 0 {
+                    GeometryReader { proxy in
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .fill(Color.accentColor.opacity(0.22))
+                            .frame(width: proxy.size.width * fraction)
+                    }
+                    .accessibilityHidden(true)
+                }
+            }
+    }
+}
+
 private struct OptionalIntegerValue: View {
     let value: Int?
+    var usesGrouping = true
 
     var body: some View {
         if let value {
-            Text(value.formatted())
+            Text(usesGrouping ? value.formatted() : String(value))
                 .monospacedDigit()
         } else {
             Text("—")
@@ -521,6 +652,7 @@ private struct OptionalIntegerValue: View {
 private struct TeamTagsTableCell: View {
     let tags: [TeamTag]
     let edit: () -> Void
+    @State private var isHovering = false
 
     var body: some View {
         Button(action: edit) {
@@ -528,11 +660,13 @@ private struct TeamTagsTableCell: View {
                 TeamTagsSummaryView(tags: tags)
                 Spacer(minLength: 4)
                 Image(systemName: "plus.circle")
+                    .foregroundStyle(isHovering ? AnyShapeStyle(.tint) : AnyShapeStyle(.quaternary))
             }
             .frame(maxWidth: .infinity, minHeight: 22, alignment: .leading)
             .contentShape(Rectangle())
         }
         .buttonStyle(.borderless)
+        .onHover { isHovering = $0 }
         .help(tags.isEmpty ? "Add a team tag" : "Edit team tags")
         .accessibilityLabel(tags.isEmpty ? "Add team tag" : "Edit team tags")
     }

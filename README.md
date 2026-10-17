@@ -26,12 +26,12 @@
 ## Features
 
 - **Live event rankings.** Choose an FTC season, enter an event code, and load every registered team and scored match from FIRST Events.
-- **Sortable performance table.** Rank teams by official rank, team number, total OPR, calculated OPRc, non-penalty OPR (npOPR), Auto OPR, Teleop OPR, or Endgame OPR in either direction.
+- **Sortable performance table.** Rank teams by official rank, team number, total OPR, calculated OPRc, non-penalty OPR (npOPR), Auto OPR, Teleop OPR, or Endgame OPR in either direction. Numbers are right-aligned, and the sorted column is highlighted with inline bars scaled to the event leader.
 - **Interactive OPR charts.** Compare the top 10 teams for OPR, npOPR, Teleop, Auto, and Endgame beside the rankings table. Every metric is ordered from highest at the top to lowest at the bottom.
 - **OPRc match predictions.** Recalculate a residual-filtered offensive-power estimate from completed matches, then compare expected alliance scores, winner, signed margin, and data quality for every upcoming match or a custom four-team matchup.
 - **Full-event chart drill-down.** Click any compact graph to open a scrollable chart containing every team with an available value. Each team has a distinct color that remains consistent across metrics.
-- **Team match history.** Click a team number to inspect every event appearance, alliance partners, opponents, final and non-penalty scores, and the selected team's win/loss result.
-- **Detailed score breakdowns.** Expand a match to compare red and blue alliance scoring by season-specific Auto, Teleop, Endgame, and penalty categories.
+- **Team match history.** Click a team number to inspect every event appearance, alliance partners, opponents, final and non-penalty scores, and the selected team's win/loss result, with an event W-L-T record and the winning alliance called out on every match.
+- **Detailed score breakdowns.** Expand a match to compare red and blue alliance scoring by season-specific Auto, Teleop, Endgame, and penalty categories. The higher value in each numeric row is emphasized so swings are easy to spot.
 - **Event highlights.** Surface the highest final, non-penalty, Auto, and Teleop alliance scores, including ties and the teams responsible.
 - **Local scouting tags.** Add reusable, color-coded notes to teams and see them in rankings, highlights, and match history. Tags stay on the Mac.
 - **Pre-event previews.** If an event has not started, use FTCScout history to compare the registered teams' strongest prior-season OPR results.

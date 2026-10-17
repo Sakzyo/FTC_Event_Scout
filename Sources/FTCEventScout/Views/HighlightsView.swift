@@ -48,7 +48,7 @@ private struct HighlightCardView: View {
         GroupBox {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .firstTextBaseline) {
-                    NumericValueView(value: highlight.score, fractionDigits: 1)
+                    NumericValueView(value: highlight.score, fractionLength: 0...1)
                         .font(.system(.largeTitle, design: .rounded, weight: .semibold))
                     Spacer()
                     Text(noteText)
@@ -114,12 +114,9 @@ private struct HighlightEntryView: View {
                 Text(entry.match.displayTitle)
                     .font(.headline)
                 Spacer()
-                Label(
-                    entry.alliance == .red ? "Red Alliance" : "Blue Alliance",
-                    systemImage: "circle.fill"
-                )
-                .font(.caption)
-                .foregroundStyle(entry.alliance == .red ? .red : .blue)
+                Label(entry.alliance.displayName, systemImage: "circle.fill")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(entry.alliance.displayColor)
             }
 
             HStack(spacing: 12) {

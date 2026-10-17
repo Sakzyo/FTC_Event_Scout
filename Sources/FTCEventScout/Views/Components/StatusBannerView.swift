@@ -46,11 +46,22 @@ struct StatusBannerView: View {
 
 struct NumericValueView: View {
     let value: Double?
-    var fractionDigits = 2
+    private let fractionLength: ClosedRange<Int>
+
+    init(value: Double?, fractionDigits: Int = 2) {
+        self.value = value
+        fractionLength = fractionDigits ... fractionDigits
+    }
+
+    /// Use a range such as `0 ... 1` to drop redundant trailing zeros from whole-number scores.
+    init(value: Double?, fractionLength: ClosedRange<Int>) {
+        self.value = value
+        self.fractionLength = fractionLength
+    }
 
     var body: some View {
         if let value {
-            Text(value, format: .number.precision(.fractionLength(fractionDigits)))
+            Text(value, format: .number.precision(.fractionLength(fractionLength)))
                 .monospacedDigit()
         } else {
             Text("—")
