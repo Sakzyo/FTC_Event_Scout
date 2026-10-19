@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Bindable var model: AppModel
+    let updater: AppUpdateController
 
     var body: some View {
         TabView {
@@ -15,7 +16,7 @@ struct SettingsView: View {
                     Label("FIRST API", systemImage: "key")
                 }
 
-            UpdatesSettingsPane()
+            UpdatesSettingsPane(updater: updater)
                 .tabItem {
                     Label("Updates", systemImage: "arrow.triangle.2.circlepath")
                 }
@@ -87,7 +88,7 @@ private struct GeneralSettingsPane: View {
 }
 
 private struct UpdatesSettingsPane: View {
-    @State private var updater = AppUpdateController()
+    @Bindable var updater: AppUpdateController
 
     var body: some View {
         Form {
@@ -97,85 +98,37 @@ private struct UpdatesSettingsPane: View {
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)
                 }
-
-                if let release = updater.latestRelease {
-                    LabeledContent("Latest version") {
-                        Text(release.version.description)
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
-                    }
-                }
             } header: {
                 Text("Version")
             }
 
             Section {
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    if updater.isWorking {
-                        ProgressView()
-                            .controlSize(.small)
-                    } else {
-                        Image(systemName: statusSymbol)
-                            .foregroundStyle(statusColor)
-                    }
+                Toggle("Automatically check for updates", isOn: $updater.automaticallyChecksForUpdates)
+                    .disabled(updater.unavailableReason != nil)
+                Toggle("Download and install updates automatically", isOn: $updater.automaticallyDownloadsUpdates)
+                    .disabled(updater.unavailableReason != nil || !updater.automaticallyChecksForUpdates)
 
-                    Text(updater.statusMessage)
+                if let reason = updater.unavailableReason {
+                    Text(reason)
                         .font(.callout)
                         .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
                         .textSelection(.enabled)
                 }
 
                 HStack {
-                    Link("View Releases", destination: releasePageURL)
-
+                    Link("View Releases", destination: AppUpdateController.releasesPageURL)
                     Spacer()
-
-                    Button(updater.buttonTitle) {
-                        Task {
-                            await updater.performUpdate()
-                        }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(updater.isWorking)
+                    Button("Check for Updates…", action: updater.checkForUpdates)
+                        .buttonStyle(.borderedProminent)
+                        .disabled(!updater.canCheckForUpdates)
                 }
             } header: {
                 Text("Software Update")
             } footer: {
-                Text("Updates are downloaded from the official GitHub release, verified with SHA-256, and opened with the macOS installer.")
+                Text("Updates are downloaded and signature-verified inside the app. Install and Relaunch applies an update immediately; automatic updates install when you quit. Your saved credentials, tags, and preferences are preserved.")
             }
         }
         .formStyle(.grouped)
-    }
-
-    private var releasePageURL: URL {
-        updater.latestRelease?.releasePageURL ?? AppUpdateService.releasesPageURL
-    }
-
-    private var statusSymbol: String {
-        switch updater.state {
-        case .upToDate:
-            return "checkmark.circle.fill"
-        case .installerOpened:
-            return "arrow.down.circle.fill"
-        case .failed:
-            return "exclamationmark.triangle.fill"
-        case .idle, .checking, .downloading:
-            return "info.circle"
-        }
-    }
-
-    private var statusColor: Color {
-        switch updater.state {
-        case .upToDate:
-            return .green
-        case .installerOpened:
-            return .accentColor
-        case .failed:
-            return .orange
-        case .idle, .checking, .downloading:
-            return .secondary
-        }
     }
 }
 

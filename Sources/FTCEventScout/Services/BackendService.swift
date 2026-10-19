@@ -1,4 +1,5 @@
 import AppKit
+import Darwin
 import Foundation
 
 struct BackendContext: Equatable {
@@ -12,6 +13,7 @@ final class BackendService {
     private var stderrPipe: Pipe?
     private var completionGate: CompletionGate?
     private var terminationObserver: NSObjectProtocol?
+    private var updateShutdownTask: Task<Void, Error>?
 
     init() {
         terminationObserver = NotificationCenter.default.addObserver(
@@ -142,6 +144,30 @@ final class BackendService {
             process.terminate()
         }
         process = nil
+        stdoutPipe = nil
+        stderrPipe = nil
+    }
+
+    @MainActor
+    func stopForUpdate() async throws {
+        if let updateShutdownTask {
+            try await updateShutdownTask.value
+            return
+        }
+
+        completionGate?.cancel()
+        completionGate = nil
+        stdoutPipe?.fileHandleForReading.readabilityHandler = nil
+        stderrPipe?.fileHandleForReading.readabilityHandler = nil
+        guard let process else { return }
+
+        let task = Task.detached(priority: .utility) {
+            try await BackendProcessShutdown.stop(process)
+        }
+        updateShutdownTask = task
+        defer { updateShutdownTask = nil }
+        try await task.value
+        self.process = nil
         stdoutPipe = nil
         stderrPipe = nil
     }
@@ -290,6 +316,30 @@ final class BackendService {
 
 }
 
+enum BackendProcessShutdown {
+    static func stop(_ process: Process) async throws {
+        guard process.isRunning else { return }
+        process.terminate()
+        if try await waitForExit(process, timeout: .seconds(2)) { return }
+
+        if process.isRunning {
+            kill(process.processIdentifier, SIGKILL)
+        }
+        guard try await waitForExit(process, timeout: .seconds(1)) else {
+            throw BackendServiceError.shutdownTimedOut
+        }
+    }
+
+    private static func waitForExit(_ process: Process, timeout: Duration) async throws -> Bool {
+        let deadline = ContinuousClock.now.advanced(by: timeout)
+        while process.isRunning {
+            guard ContinuousClock.now < deadline else { return false }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        return true
+    }
+}
+
 private struct PythonRuntime {
     let url: URL
     let version: PythonVersion
@@ -390,6 +440,7 @@ enum BackendServiceError: LocalizedError {
     case pythonNotFound
     case launchFailed(String)
     case startupTimedOut
+    case shutdownTimedOut
 
     var errorDescription: String? {
         switch self {
@@ -401,6 +452,8 @@ enum BackendServiceError: LocalizedError {
             "The local data service could not start. \(detail)"
         case .startupTimedOut:
             "The local data service did not become ready within 15 seconds."
+        case .shutdownTimedOut:
+            "The local data service could not be stopped. Try quitting again."
         }
     }
 }

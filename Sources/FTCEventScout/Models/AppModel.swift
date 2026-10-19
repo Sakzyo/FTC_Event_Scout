@@ -66,6 +66,7 @@ final class AppModel {
     @ObservationIgnored private var persistedToken: String
     @ObservationIgnored private var loadTask: Task<Void, Never>?
     @ObservationIgnored private var loadGeneration = 0
+    @ObservationIgnored private var isPreparingForUpdate = false
 
     init() {
         let preferences = PreferencesService()
@@ -149,6 +150,19 @@ final class AppModel {
         startBackend()
     }
 
+    func prepareForUpdate() async throws {
+        isPreparingForUpdate = true
+        loadTask?.cancel()
+        loadTask = nil
+        loadGeneration += 1
+        do {
+            try await backendService.stopForUpdate()
+        } catch {
+            isPreparingForUpdate = false
+            throw error
+        }
+    }
+
     func refreshEvent() {
         loadEvent()
     }
@@ -159,6 +173,7 @@ final class AppModel {
     }
 
     func loadEvent() {
+        guard !isPreparingForUpdate else { return }
         guard case .ready(let context) = launchState else { return }
         let normalized = eventCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         guard !normalized.isEmpty else {
@@ -327,6 +342,7 @@ final class AppModel {
     }
 
     private func startBackend() {
+        guard !isPreparingForUpdate else { return }
         guard hasCompleteCredentials else {
             backendService.stop()
             settingsMessage = nil
@@ -339,7 +355,7 @@ final class AppModel {
             username: normalizedUsername,
             token: normalizedToken
         ) { [weak self] result in
-            guard let self else { return }
+            guard let self, !self.isPreparingForUpdate else { return }
             switch result {
             case .success(let context):
                 self.launchState = .ready(context)

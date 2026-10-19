@@ -16,12 +16,53 @@ BUNDLE_ID="org.ftceventscout.app"
 APP_VERSION="${FTC_SCOUT_APP_VERSION:-1.0.4}"
 APP_BUILD="${FTC_SCOUT_APP_BUILD:-5}"
 SIGNING_IDENTITY="${FTC_SCOUT_CODESIGN_IDENTITY:--}"
+UPDATE_FEED_URL="${FTC_SCOUT_UPDATE_FEED_URL:-https://github.com/Sakzyo/FTC_Event_Scout/releases/latest/download/appcast.xml}"
+NOTARY_PROFILE="${FTC_SCOUT_NOTARYTOOL_PROFILE:-}"
 APP_BUNDLE="$DIST_DIR/$APP_NAME.app"
 APP_CONTENTS="$APP_BUNDLE/Contents"
 APP_MACOS="$APP_CONTENTS/MacOS"
 APP_RESOURCES="$APP_CONTENTS/Resources"
 BACKEND_RESOURCES="$APP_RESOURCES/Backend"
 SWIFT_LOG="$BUILD_ROOT/swift-build.log"
+
+SPARKLE_PUBLIC_KEY="$(python3 - "$ROOT_DIR/config/sparkle-public-key.txt" <<'PY'
+import base64
+import binascii
+import os
+from pathlib import Path
+import sys
+
+key = os.environ.get("FTC_SCOUT_SPARKLE_PUBLIC_KEY")
+if key is None:
+    path = Path(sys.argv[1])
+    key = path.read_text() if path.is_file() else ""
+key = key.strip()
+if not key:
+    sys.exit("Sparkle public key is missing. Run Sparkle's generate_keys and save its public key in config/sparkle-public-key.txt.")
+try:
+    decoded = base64.b64decode(key, validate=True)
+except (ValueError, binascii.Error):
+    decoded = b""
+if len(decoded) != 32 or decoded == bytes(32):
+    sys.exit("Sparkle requires a valid base64-encoded 32-byte Ed25519 public key.")
+print(key)
+PY
+)"
+python3 - "$CONFIGURATION" "$UPDATE_FEED_URL" <<'PY'
+import sys
+from urllib.parse import urlsplit
+
+configuration, feed_url = sys.argv[1:]
+url = urlsplit(feed_url)
+loopback = url.hostname in ("localhost", "127.0.0.1", "::1")
+local_debug = configuration == "debug" and url.scheme == "http" and loopback
+if not url.hostname or url.username or url.password or url.fragment or (configuration == "release" and loopback) or (url.scheme != "https" and not local_debug):
+    sys.exit("Sparkle update feed must use HTTPS; debug builds may explicitly use an HTTP localhost feed.")
+PY
+if [[ -n "$NOTARY_PROFILE" && "$SIGNING_IDENTITY" == "-" ]]; then
+  echo "Notarization requires FTC_SCOUT_CODESIGN_IDENTITY to name a Developer ID Application certificate." >&2
+  exit 1
+fi
 
 mkdir -p "$BUILD_ROOT/ModuleCache" "$BUILD_ROOT/clang-module-cache" "$BUILD_ROOT/swiftpm-cache"
 export SWIFTPM_MODULECACHE_OVERRIDE="$BUILD_ROOT/ModuleCache"
@@ -68,11 +109,17 @@ if [[ "$CONFIGURATION" == "release" ]]; then
   BIN_PATH="$(swift build --show-bin-path --cache-path "$BUILD_ROOT/swiftpm-cache" -c release)"
 fi
 BUILD_BINARY="$BIN_PATH/$EXECUTABLE_NAME"
+SPARKLE_FRAMEWORK="$BUILD_ROOT/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
+if [[ ! -d "$SPARKLE_FRAMEWORK" ]]; then
+  echo "Sparkle.framework is missing from SwiftPM artifacts. Resolve the Sparkle package before packaging." >&2
+  exit 1
+fi
 
 rm -rf "$APP_BUNDLE"
-mkdir -p "$APP_MACOS" "$APP_RESOURCES" "$BACKEND_RESOURCES"
+mkdir -p "$APP_MACOS" "$APP_RESOURCES" "$BACKEND_RESOURCES" "$APP_CONTENTS/Frameworks"
 cp "$BUILD_BINARY" "$APP_MACOS/$EXECUTABLE_NAME"
 chmod +x "$APP_MACOS/$EXECUTABLE_NAME"
+/usr/bin/ditto "$SPARKLE_FRAMEWORK" "$APP_CONTENTS/Frameworks/Sparkle.framework"
 
 for file in \
   web_server.py scrape.py calculate_opr_from_csv.py \
@@ -136,15 +183,39 @@ cat >"$APP_CONTENTS/Info.plist" <<PLIST
 </plist>
 PLIST
 
-if [[ "$SIGNING_IDENTITY" == "-" ]]; then
-  codesign --force --sign - "$APP_BUNDLE" >/dev/null
-else
-  codesign \
-    --force \
-    --options runtime \
-    --timestamp \
-    --sign "$SIGNING_IDENTITY" \
-    "$APP_BUNDLE" >/dev/null
+python3 - "$APP_CONTENTS/Info.plist" "$UPDATE_FEED_URL" "$SPARKLE_PUBLIC_KEY" <<'PY'
+import plistlib
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+with path.open("rb") as file:
+    info = plistlib.load(file)
+info.update(SUFeedURL=sys.argv[2], SUPublicEDKey=sys.argv[3], SUVerifyUpdateBeforeExtraction=True)
+with path.open("wb") as file:
+    plistlib.dump(info, file, sort_keys=False)
+PY
+
+SIGN_ARGS=(--force --sign "$SIGNING_IDENTITY")
+if [[ "$SIGNING_IDENTITY" != "-" ]]; then
+  SIGN_ARGS+=(--options runtime --timestamp)
 fi
+EMBEDDED_SPARKLE="$APP_CONTENTS/Frameworks/Sparkle.framework"
+codesign "${SIGN_ARGS[@]}" "$EMBEDDED_SPARKLE/Versions/B/Autoupdate" >/dev/null
+while IFS= read -r nested_bundle; do
+  codesign "${SIGN_ARGS[@]}" --preserve-metadata=identifier,entitlements "$nested_bundle" >/dev/null
+done < <(find "$EMBEDDED_SPARKLE/Versions" -depth -type d \( -name '*.app' -o -name '*.xpc' \) -print)
+codesign "${SIGN_ARGS[@]}" "$EMBEDDED_SPARKLE" >/dev/null
+codesign "${SIGN_ARGS[@]}" "$APP_BUNDLE" >/dev/null
 codesign --verify --deep --strict "$APP_BUNDLE"
+
+if [[ -n "$NOTARY_PROFILE" ]]; then
+  NOTARY_ARCHIVE="$BUILD_ROOT/FTCEventScout-notarization.zip"
+  rm -f "$NOTARY_ARCHIVE"
+  /usr/bin/ditto -c -k --sequesterRsrc --keepParent "$APP_BUNDLE" "$NOTARY_ARCHIVE"
+  xcrun notarytool submit "$NOTARY_ARCHIVE" --keychain-profile "$NOTARY_PROFILE" --wait
+  xcrun stapler staple "$APP_BUNDLE"
+  xcrun stapler validate "$APP_BUNDLE"
+  rm -f "$NOTARY_ARCHIVE"
+fi
 echo "Packaged $APP_BUNDLE (native SwiftUI, $CONFIGURATION)"

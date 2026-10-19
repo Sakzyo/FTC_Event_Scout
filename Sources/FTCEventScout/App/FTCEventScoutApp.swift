@@ -2,7 +2,9 @@ import SwiftUI
 
 @main
 struct FTCEventScoutApp: App {
-    @State private var model = AppModel()
+    @NSApplicationDelegateAdaptor(AppLifecycleDelegate.self) private var delegate
+
+    private var model: AppModel { delegate.model }
 
     var body: some Scene {
         WindowGroup {
@@ -13,6 +15,11 @@ struct FTCEventScoutApp: App {
         .windowResizability(.contentMinSize)
         .windowToolbarStyle(.unified)
         .commands {
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…", action: delegate.updater.checkForUpdates)
+                    .disabled(!delegate.updater.canCheckForUpdates)
+            }
+
             SidebarCommands()
 
             CommandMenu("Scout") {
@@ -31,7 +38,7 @@ struct FTCEventScoutApp: App {
         }
 
         Settings {
-            SettingsView(model: model)
+            SettingsView(model: model, updater: delegate.updater)
         }
         .windowResizability(.contentSize)
     }
