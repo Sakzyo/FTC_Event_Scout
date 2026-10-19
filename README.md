@@ -36,7 +36,7 @@
 - **Event highlights.** Surface the highest final, non-penalty, Auto, and Teleop alliance scores, including ties and the teams responsible.
 - **Local scouting tags.** Add reusable, color-coded notes to teams and see them in rankings, highlights, and match history. Tags stay on the Mac.
 - **Pre-event previews.** If an event has not started, use FTCScout history to compare the registered teams' strongest prior-season OPR results.
-- **Verified in-app updates.** Open **Settings → Updates** to check for the newest GitHub release, verify its SHA-256 digest, and open the downloaded macOS installer.
+- **Signed in-app updates.** Open **Settings → Updates** or **FTC Event Scout → Check for Updates…** to download, verify, install, and relaunch through Sparkle 2. Optional automatic checks and installation on quit are available in Settings.
 
 
 ## Feature tour
@@ -107,7 +107,7 @@ OPR and OPRc are scouting estimates, not official FTC rankings. Their additive m
 3. Open the downloaded DMG and drag **FTC Event Scout** into **Applications**.
 4. Launch the app and enter your FIRST Events API username and token.
 
-After installation, choose **FTC Event Scout → Settings → Updates → Check for Updates** to download and open the latest verified installer without searching for the release manually.
+Sparkle-enabled builds offer **FTC Event Scout → Check for Updates…** and **Settings → Updates**. Updates are signed ZIP archives installed inside the app, with an **Install and Relaunch** action. Automatic checks and installation on quit can be enabled in Settings. Users of the published 1.0.4 build need one final manual installation of a Sparkle-enabled release. The update feed becomes available when that release publishes its ZIP and `appcast.xml`.
 
 Version 1.0.4 is ad-hoc signed and not notarized. If macOS blocks the first launch, open **System Settings → Privacy & Security** and choose **Open Anyway**.
 
@@ -130,11 +130,19 @@ For build-only workflows:
 ./script/package_app.sh release
 ```
 
-To create the release app, compressed GitHub release DMG, and SHA-256 checksum:
+To create the release app, compressed first-install DMG, and SHA-256 checksum:
 
 ```sh
 ./script/package_dmg.sh
 ```
+
+To create a signed in-app update ZIP and appcast from the finalized app:
+
+```sh
+./script/package_update.sh
+```
+
+See [Software updates](docs/software-updates.md) for Keychain setup, signing, optional notarization, publication, and update verification.
 
 
 ## Repo layout
