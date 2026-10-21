@@ -1,0 +1,12 @@
+Use case: ads-marketing
+Asset type: A3 portrait project poster, 297 x 420 mm proportion, a flat finished artwork ready to print, highest available resolution.
+Primary request: Create a poster for "FTC Event Scout" in the unmistakable style of early AI-generated images: circa 2021 VQGAN+CLIP and early diffusion dreamscapes, with hallucinatory painterly texture, warped mechanical details, uncanny repeated forms, smeared luminous edges and imperfect latent-space geometry.
+Scene/backdrop: A FIRST Tech Challenge robotics competition arena dissolving into data. Compact wheeled competition robots with exposed aluminum mechanisms, wheels, gears and wiring merge dreamily with floating ranking rows and ascending OPR bar-chart shapes. The arena and analytical charts should remain identifiable but feel imagined by an early image model.
+Subject: The project is a native macOS scouting app for exploring FTC event rankings, comparing offensive power ratings (OPR), and viewing match predictions. Make a surreal robotic/data composition, with a strong central silhouette and richly textured, slightly strange visual detail.
+Style/medium: Early generative AI artwork with visibly melted geometry, psychedelic machine-dream atmosphere and painterly computational noise. Rich luminous color arising from the robotic scene, deep shadow and hazy light. Avoid a pristine contemporary 3D render or sleek modern app-ad aesthetic.
+Composition/framing: Portrait A3 proportions. Bold readable project title in the upper portion, immersive surreal robotics artwork filling the middle, concise readable feature text near the bottom. Generous safe margins around all text. Flat full poster, no frame, no wall mockup, no perspective on the poster itself.
+Text (verbatim): Main title across three large lines: "FTC" / "EVENT" / "SCOUT".
+Subtitle: "Native macOS scouting for FIRST Tech Challenge"
+Feature text: "LIVE RANKINGS" / "OPR COMPARISONS" / "MATCH PREDICTIONS"
+Typography: Prominent and readable from a distance. All required text must be correctly spelled and rendered verbatim. The artwork carries the early-AI imperfections; keep the main title coherent.
+Constraints: One finished poster only. Do not add slogans, fabricated performance numbers, a release version, QR codes, watermarks, logos, or any extra text. Do not claim the app is AI-powered or officially endorsed. Keep all text entirely within the image. A3 portrait aspect ratio approximately 1:1.414.

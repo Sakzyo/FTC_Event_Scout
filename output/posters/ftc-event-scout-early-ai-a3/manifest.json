@@ -1,0 +1,39 @@
+{
+  "title": "FTC Event Scout - Early AI A3 Poster",
+  "dimensions_mm": [
+    297,
+    420
+  ],
+  "orientation": "portrait",
+  "page_count": 1,
+  "generation": "Built-in ImageGen; one background generation and one style refinement",
+  "source_artwork_pixels": [
+    1054,
+    1492
+  ],
+  "typography": "Vector text in the PDF; embedded Impact and Arial fonts",
+  "content_source": "Project README.md and matching Swift source, reviewed locally",
+  "sections": [
+    {
+      "heading": "EVENT DATA",
+      "text": "Choose a season and event code to load registered teams and scored matches from FIRST Events. Before an event starts, preview registered teams using their historical FTCScout OPR."
+    },
+    {
+      "heading": "PERFORMANCE ANALYSIS",
+      "text": "Compare OPR estimates for overall, Auto, Teleop and Endgame contributions. Explore upcoming matches and custom four-team matchups using OPRc."
+    },
+    {
+      "heading": "SCOUTING TOOLS",
+      "text": "Sort rankings, open full-event charts and inspect score breakdowns. Save color-coded team tags locally on your Mac."
+    }
+  ],
+  "paragraph_line_counts": [
+    5,
+    4,
+    4
+  ],
+  "pdf": "FTC-Event-Scout-Early-AI-A3.pdf",
+  "png": "FTC-Event-Scout-Early-AI-A3.png",
+  "raster_export_dpi": 300,
+  "note": "300 dpi describes the raster export grid; generated artwork retains its native detail. No bleed added."
+}

@@ -90,14 +90,14 @@ def load_score_lookup(event_code, season):
     score_lookup = {}
     for tournament_level in TOURNAMENT_LEVELS:
         response = make_request(f"scores/{event_code}/{tournament_level}", season)
-        for match_score in response.get("matchScores", []):
+        for match_score in response.get("matchScores") or []:
             key = (
                 match_score.get("matchLevel"),
                 match_score.get("matchSeries"),
                 match_score.get("matchNumber"),
             )
             alliances = {
-                alliance.get("alliance"): alliance for alliance in match_score.get("alliances", [])
+                alliance.get("alliance"): alliance for alliance in (match_score.get("alliances") or [])
             }
             score_lookup[key] = alliances
     return score_lookup
@@ -155,9 +155,19 @@ def flatten_match(match, score_lookup, season):
     blue_totals["foul_awarded"] = blue_foul_awarded
     blue_totals["foul_committed"] = blue_foul_committed
 
-    if red_totals["teleop"] is None and red_final is not None and red_totals["auto"] is not None:
+    if (
+        red_totals["teleop"] is None
+        and red_final is not None
+        and red_totals["auto"] is not None
+        and (int(season) != 2026 or red_foul_awarded is not None)
+    ):
         red_totals["teleop"] = red_final - red_totals["auto"] - (red_foul_awarded or 0)
-    if blue_totals["teleop"] is None and blue_final is not None and blue_totals["auto"] is not None:
+    if (
+        blue_totals["teleop"] is None
+        and blue_final is not None
+        and blue_totals["auto"] is not None
+        and (int(season) != 2026 or blue_foul_awarded is not None)
+    ):
         blue_totals["teleop"] = blue_final - blue_totals["auto"] - (blue_foul_awarded or 0)
 
     red_breakdown = build_score_breakdown_rows(
@@ -167,6 +177,7 @@ def flatten_match(match, score_lookup, season):
         match_auto=match.get("scoreRedAuto"),
         match_final=red_final,
         match_foul_awarded=red_foul_awarded,
+        match_teleop=red_totals["teleop"],
     )
     blue_breakdown = build_score_breakdown_rows(
         season,
@@ -175,6 +186,7 @@ def flatten_match(match, score_lookup, season):
         match_auto=match.get("scoreBlueAuto"),
         match_final=blue_final,
         match_foul_awarded=blue_foul_awarded,
+        match_teleop=blue_totals["teleop"],
     )
 
     return {
