@@ -1,0 +1,170 @@
+{
+  "event": {
+    "eventId": "21459768-c5bc-bd43-9156-192e33bbe3af",
+    "code": "KZASN1",
+    "divisionCode": null,
+    "name": "AI & Digital Bridge Cup 2026",
+    "remote": false,
+    "hybrid": false,
+    "fieldCount": 1,
+    "published": true,
+    "type": "0",
+    "typeName": "Non-Advancement",
+    "regionCode": "KZ",
+    "leagueCode": null,
+    "districtCode": "",
+    "venue": "Alem.ai",
+    "address": "Mangilik El 55/1, Block B1",
+    "city": "Astana",
+    "stateprov": "AST",
+    "country": "Kazakhstan",
+    "website": null,
+    "liveStreamUrl": null,
+    "coordinates": {
+      "type": "Point",
+      "coordinates": [
+        71.42145,
+        51.0914
+      ]
+    },
+    "webcasts": null,
+    "timezone": "Asia/Almaty",
+    "dateStart": "2026-09-24T00:00:00",
+    "dateEnd": "2026-09-25T00:00:00"
+  },
+  "sourceUrls": [
+    "https://ftc-api.firstinspires.org/v2.0/2026/scores/KZASN1/playoff",
+    "https://ftc-api.firstinspires.org/v2.0/2026/matches/KZASN1?tournamentLevel=playoff",
+    "https://ftc-events.firstinspires.org/2026/KZASN1/playoff/5/1"
+  ],
+  "match": {
+    "actualStartTime": "2026-09-26T18:49:34.845",
+    "description": "Lower Bracket  Round 3 Match 5",
+    "tournamentLevel": "PLAYOFF",
+    "series": 5,
+    "matchNumber": 1,
+    "scoreRedFinal": 127,
+    "scoreRedFoul": 40,
+    "scoreRedAuto": 36,
+    "scoreBlueFinal": 94,
+    "scoreBlueFoul": 0,
+    "scoreBlueAuto": 16,
+    "postResultTime": "2026-09-26T18:54:29.739",
+    "videoURL": null,
+    "teams": [
+      {
+        "teamNumber": 21094,
+        "station": "Red1",
+        "dq": false,
+        "onField": false
+      },
+      {
+        "teamNumber": 27674,
+        "station": "Red2",
+        "dq": false,
+        "onField": false
+      },
+      {
+        "teamNumber": 24697,
+        "station": "Blue1",
+        "dq": false,
+        "onField": false
+      },
+      {
+        "teamNumber": 32717,
+        "station": "Blue2",
+        "dq": false,
+        "onField": false
+      }
+    ],
+    "modifiedOn": "2026-09-26T15:44:43.903"
+  },
+  "score": {
+    "matchLevel": "PLAYOFF",
+    "matchSeries": 5,
+    "matchNumber": 1,
+    "randomization": -1,
+    "alliances": [
+      {
+        "alliance": "Blue",
+        "team": 0,
+        "autoHiveTips": 0,
+        "autoRobot1Leave": true,
+        "autoRobot2Leave": true,
+        "autoRobot1Park": true,
+        "autoRobot2Park": true,
+        "autoLeavePoints": 6,
+        "autoParkPoints": 10,
+        "autoHivePoints": 0,
+        "teleopHiveTips": 1,
+        "teleopHivePollenNectar": 3,
+        "redAllianceFlower": [],
+        "scoringFlower": [],
+        "blueAllianceFlower": [],
+        "audienceFlower": [
+          "RED_NECTAR",
+          "POLLEN",
+          "POLLEN",
+          "POLLEN"
+        ],
+        "teleopGardenPollenNectar": 2,
+        "teleopRobot1Park": true,
+        "teleopRobot2Park": true,
+        "teleopHivePoints": 26,
+        "teleopFlowerPoints": 0,
+        "teleopGardenPoints": 2,
+        "teleopParkPoints": 10,
+        "autoPoints": 16,
+        "teleopPoints": 38,
+        "foulPointsCommitted": 0,
+        "preFoulTotal": 54,
+        "swarmRP": true,
+        "pollinator1RP": false,
+        "pollinator2RP": false,
+        "totalPoints": 94,
+        "majorFouls": 0,
+        "minorFouls": 0
+      },
+      {
+        "alliance": "Red",
+        "team": 0,
+        "autoHiveTips": 1,
+        "autoRobot1Leave": true,
+        "autoRobot2Leave": true,
+        "autoRobot1Park": true,
+        "autoRobot2Park": true,
+        "autoLeavePoints": 6,
+        "autoParkPoints": 10,
+        "autoHivePoints": 20,
+        "teleopHiveTips": 2,
+        "teleopHivePollenNectar": 14,
+        "redAllianceFlower": [],
+        "scoringFlower": [],
+        "blueAllianceFlower": [],
+        "audienceFlower": [
+          "RED_NECTAR",
+          "POLLEN",
+          "POLLEN",
+          "POLLEN"
+        ],
+        "teleopGardenPollenNectar": 0,
+        "teleopRobot1Park": true,
+        "teleopRobot2Park": true,
+        "teleopHivePoints": 68,
+        "teleopFlowerPoints": 13,
+        "teleopGardenPoints": 0,
+        "teleopParkPoints": 10,
+        "autoPoints": 36,
+        "teleopPoints": 91,
+        "foulPointsCommitted": 40,
+        "preFoulTotal": 127,
+        "swarmRP": true,
+        "pollinator1RP": false,
+        "pollinator2RP": false,
+        "totalPoints": 127,
+        "majorFouls": 2,
+        "minorFouls": 0
+      }
+    ]
+  }
+}

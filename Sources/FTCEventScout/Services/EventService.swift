@@ -126,7 +126,7 @@ struct EventService {
         }
     }
 
-    private func parseMatches(at url: URL, season: Int) throws -> [MatchRecord] {
+    func parseMatches(at url: URL, season: Int) throws -> [MatchRecord] {
         let rows = try CSVParser.rows(from: Data(contentsOf: url))
         return rows.enumerated().map { index, row in
             let series = number(row, keys: ["Series"])
@@ -233,7 +233,11 @@ struct EventService {
         return [
             detail("auto", "Autonomous", autoScore),
             detail("teleop", teleopLabel, teleopScore),
-            detail("endgame", "End Game", endgameScore),
+            detail(
+                season == 2026 ? "teleop-park-points" : "endgame",
+                season == 2026 ? "Park Points" : "End Game",
+                endgameScore
+            ),
             detail("penalty", "Penalty Points Awarded", foulScore),
             detail("final", "Final Score", finalScore),
         ].compactMap { $0 }

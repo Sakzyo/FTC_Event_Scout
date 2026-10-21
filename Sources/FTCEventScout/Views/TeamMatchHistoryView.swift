@@ -431,6 +431,7 @@ private struct ScoreBreakdownGrid: View {
                         value: row.redValue,
                         alliance: .red,
                         usesDecodePatternColors: row.usesDecodePatternColors,
+                        lineLimit: row.valueLineLimit,
                         isBold: row.usesBoldValue,
                         comparison: .init(alliance: .red, leader: leader)
                     )
@@ -439,6 +440,7 @@ private struct ScoreBreakdownGrid: View {
                         value: row.blueValue,
                         alliance: .blue,
                         usesDecodePatternColors: row.usesDecodePatternColors,
+                        lineLimit: row.valueLineLimit,
                         isBold: row.usesBoldValue,
                         comparison: .init(alliance: .blue, leader: leader)
                     )
@@ -480,6 +482,7 @@ private struct BreakdownValueView: View {
     let value: String?
     let alliance: AllianceColor
     let usesDecodePatternColors: Bool
+    let lineLimit: Int?
     let isBold: Bool
     let comparison: BreakdownComparison
 
@@ -496,8 +499,10 @@ private struct BreakdownValueView: View {
         .monospacedDigit()
         .fontWeight(fontWeight)
         .opacity(comparison == .lower ? 0.6 : 1)
-        .lineLimit(1)
+        .lineLimit(lineLimit)
         .minimumScaleFactor(0.75)
+        .multilineTextAlignment(.trailing)
+        .fixedSize(horizontal: false, vertical: lineLimit == nil)
         .frame(maxWidth: .infinity, alignment: .trailing)
         .accessibilityLabel(value ?? "Unavailable")
         .accessibilityValue(comparison == .higher ? "Higher" : "")
@@ -545,6 +550,13 @@ struct BreakdownRow: Identifiable {
 
     var usesDecodePatternColors: Bool {
         id == "auto-classifier" || id == "teleop-classifier"
+    }
+
+    var valueLineLimit: Int? {
+        switch id {
+        case "teleop-flower-red", "teleop-flower-scoring", "teleop-flower-blue", "teleop-flower-audience": nil
+        default: 1
+        }
     }
 
     /// The alliance with the strictly higher single numeric value in this row, if any.

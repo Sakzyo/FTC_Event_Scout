@@ -103,6 +103,13 @@ def score_totals(
         foul_committed = score.get("foulPointsCommitted")
         minor = score.get("minorFouls")
         major = score.get("majorFouls")
+    elif season == 2026:
+        auto = score.get("autoPoints")
+        teleop = score.get("teleopPoints")
+        endgame = score.get("teleopParkPoints")
+        foul_committed = score.get("foulPointsCommitted")
+        minor = score.get("minorFouls")
+        major = score.get("majorFouls")
     else:
         auto = first_value(score, "autoPoints", "autonomousPoints")
         teleop = first_value(
@@ -150,6 +157,7 @@ def build_score_breakdown_rows(
     match_auto=None,
     match_final=None,
     match_foul_awarded=None,
+    match_teleop=None,
 ):
     """Create ordered display rows matching the official season breakdown."""
     season = int(season)
@@ -161,6 +169,7 @@ def build_score_breakdown_rows(
         2023: _centerstage_rows,
         2024: _into_the_deep_rows,
         2025: _decode_rows,
+        2026: _biobuzz_rows,
     }
     totals = score_totals(
         season,
@@ -169,9 +178,17 @@ def build_score_breakdown_rows(
         match_final=match_final,
         match_foul_awarded=match_foul_awarded,
     )
+    if season == 2026 and totals["teleop"] is None:
+        totals["teleop"] = match_teleop
     builder = builders.get(season)
     rows = builder(score, totals) if builder else _generic_rows(totals)
-    rows.extend(_penalty_and_final_rows(opponent_score, totals))
+    rows.extend(_penalty_and_final_rows(opponent_score, totals, include_missing=season == 2026))
+    if season == 2026:
+        rows.extend([
+            _biobuzz_row("rp-swarm", "Swarm RP", score.get("swarmRP")),
+            _biobuzz_row("rp-pollinator-1", "Pollinator 1 RP", score.get("pollinator1RP")),
+            _biobuzz_row("rp-pollinator-2", "Pollinator 2 RP", score.get("pollinator2RP")),
+        ])
     return rows
 
 
@@ -374,6 +391,39 @@ def _decode_classifier(value):
     return abbreviations.get(str(value).strip().upper(), value)
 
 
+def _biobuzz_row(identifier, label, value, indent=0, emphasized=False):
+    return _row(identifier, label, "—" if value is None else value, indent, emphasized)
+
+
+def _biobuzz_flower(value):
+    return "Empty" if value == [] else value
+
+
+def _biobuzz_rows(score, totals):
+    return [
+        _biobuzz_row("auto", "Auto", totals["auto"], emphasized=True),
+        _biobuzz_row("auto-hive-tips", "Hive Tips", score.get("autoHiveTips"), 1),
+        _biobuzz_row("auto-leave", "Leave (Robot 1 / 2)", _pair(score, "autoRobot1Leave", "autoRobot2Leave"), 1),
+        _biobuzz_row("auto-park", "Park (Robot 1 / 2)", _pair(score, "autoRobot1Park", "autoRobot2Park"), 1),
+        _biobuzz_row("auto-leave-points", "Leave Points", score.get("autoLeavePoints"), 1),
+        _biobuzz_row("auto-park-points", "Park Points", score.get("autoParkPoints"), 1),
+        _biobuzz_row("auto-hive-points", "Hive Points", score.get("autoHivePoints"), 1),
+        _biobuzz_row("teleop", "Teleop", totals["teleop"], emphasized=True),
+        _biobuzz_row("teleop-hive-tips", "Hive Tips", score.get("teleopHiveTips"), 1),
+        _biobuzz_row("teleop-hive-pollen-nectar", "Hive Pollen / Nectar Remaining", score.get("teleopHivePollenNectar"), 1),
+        _biobuzz_row("teleop-flower-red", "Red Alliance Flower", _biobuzz_flower(score.get("redAllianceFlower")), 1),
+        _biobuzz_row("teleop-flower-scoring", "Scoring Flower", _biobuzz_flower(score.get("scoringFlower")), 1),
+        _biobuzz_row("teleop-flower-blue", "Blue Alliance Flower", _biobuzz_flower(score.get("blueAllianceFlower")), 1),
+        _biobuzz_row("teleop-flower-audience", "Audience Flower", _biobuzz_flower(score.get("audienceFlower")), 1),
+        _biobuzz_row("teleop-garden-pollen-nectar", "Garden Pollen / Nectar", score.get("teleopGardenPollenNectar"), 1),
+        _biobuzz_row("teleop-park", "Park (Robot 1 / 2)", _pair(score, "teleopRobot1Park", "teleopRobot2Park"), 1),
+        _biobuzz_row("teleop-hive-points", "Hive Points", score.get("teleopHivePoints"), 1),
+        _biobuzz_row("teleop-flower-points", "Flower Points", score.get("teleopFlowerPoints"), 1),
+        _biobuzz_row("teleop-garden-points", "Garden Points", score.get("teleopGardenPoints"), 1),
+        _biobuzz_row("teleop-park-points", "Park Points", score.get("teleopParkPoints"), 1),
+    ]
+
+
 def _generic_rows(totals):
     return _rows(
         _row("auto", "Autonomous", totals["auto"], emphasized=True),
@@ -382,12 +432,13 @@ def _generic_rows(totals):
     )
 
 
-def _penalty_and_final_rows(opponent_score, totals):
+def _penalty_and_final_rows(opponent_score, totals, include_missing=False):
     opponent_minor = first_value(opponent_score, "minorFouls", "minorPenalties")
     opponent_major = first_value(opponent_score, "majorFouls", "majorPenalties")
+    row = _biobuzz_row if include_missing else _row
     return _rows(
-        _row("penalty", "Penalty Points Awarded", totals["foul_awarded"], emphasized=True),
-        _row("penalty-minor", "Opponent Minor Fouls", opponent_minor, 1),
-        _row("penalty-major", "Opponent Major Fouls", opponent_major, 1),
-        _row("final", "Final Score", totals["final"], emphasized=True),
+        row("penalty", "Penalty Points Awarded", totals["foul_awarded"], emphasized=True),
+        row("penalty-minor", "Opponent Minor Fouls", opponent_minor, 1),
+        row("penalty-major", "Opponent Major Fouls", opponent_major, 1),
+        row("final", "Final Score", totals["final"], emphasized=True),
     )
