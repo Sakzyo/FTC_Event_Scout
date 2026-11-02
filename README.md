@@ -32,7 +32,7 @@
 - **OPRc match predictions.** Recalculate a residual-filtered offensive-power estimate from completed matches, then compare expected alliance scores, winner, signed margin, and data quality for every upcoming match or a custom four-team matchup.
 - **Full-event chart drill-down.** Click any compact graph to open a scrollable chart containing every team with an available value. Each team has a distinct color that remains consistent across metrics.
 - **Team match history.** Click a team's row to inspect every event appearance, alliance partners, opponents, final and non-penalty scores, and the selected team's win/loss result, with an event W-L-T record and the winning alliance called out on every match.
-- **Detailed score breakdowns.** Expand a match to compare red and blue alliance scoring by season-specific Auto, Teleop, Endgame, and penalty categories. The higher value in each numeric row is emphasized so swings are easy to spot.
+- **Detailed score breakdowns.** Expand a match to compare red and blue alliance scoring by season-specific Auto, Teleop, Endgame, and penalty categories, from SKYSTONE through BIOBUZZ. The higher value in each numeric row is emphasized so swings are easy to spot.
 - **Event highlights.** Surface the highest final, non-penalty, Auto, and Teleop alliance scores, including ties and the teams responsible.
 - **Local scouting tags.** Add reusable, color-coded notes to teams and see them in rankings, highlights, and match history. Tags stay on the Mac.
 - **Pre-event previews.** If an event has not started, use FTCScout history to compare the registered teams' strongest prior-season OPR results.
@@ -65,6 +65,24 @@ The expanded chart includes every team with available data, exact values, negati
 4. Click a team's row to open its match history, then expand **Score Breakdown** for alliance-level detail.
 5. Use the add-tag control to record traits such as `Strong Auto`, `Consistent`, or `Watch Defense`; reuse the same tag for other teams at that event.
 6. Open **Highlights** in the sidebar to find the matches and alliances behind the event's best scores.
+
+
+## Supported seasons
+
+The toolbar season picker covers every FIRST Events season with a dedicated score breakdown. DECODE is the default selection.
+
+| Season    | Game           | Notes |
+| --------- | -------------- | ----- |
+| 2026–2027 | BIOBUZZ        | Hive, flower, garden, and park rows plus Swarm and Pollinator ranking points. Park points fill the Endgame column, and details the API has not published yet show as `—`. |
+| 2025–2026 | DECODE         | |
+| 2024–2025 | INTO THE DEEP  | |
+| 2023–2024 | CENTERSTAGE    | |
+| 2022–2023 | POWERPLAY      | |
+| 2021–2022 | FREIGHT FRENZY | |
+| 2020–2021 | ULTIMATE GOAL  | |
+| 2019–2020 | SKYSTONE       | |
+
+Every season gets the same Auto, Teleop, Endgame, penalty, and final totals for OPR and highlights. When FIRST Events leaves out a teleop total, the helper derives it from the final, Auto, and penalty scores.
 
 
 ## How it works
@@ -113,7 +131,7 @@ Version 1.0.4 is ad-hoc signed and not notarized. If macOS blocks the first laun
 
 ### Development
 
-Development requires macOS 14+, Xcode with Swift 5.10+ support, and Python 3; loading live data also requires FIRST Events API credentials.
+Development requires macOS 14+, Xcode with Swift 5.10+ support, and Python 3. Loading live data also requires FIRST Events API credentials. The only Swift dependency, Sparkle 2.10.0, is pinned in `Package.swift`, and SwiftPM downloads it on the first build.
 
 ```sh
 git clone https://github.com/Sakzyo/FTC_Event_Scout.git
@@ -144,21 +162,34 @@ To create a signed in-app update ZIP and appcast from the finalized app:
 
 See [Software updates](docs/software-updates.md) for Keychain setup, signing, optional notarization, publication, and update verification.
 
+### Tests
+
+The Swift suite covers models, ranking presentation, score import, predictions, credentials, and the updater. The Python suite covers score-breakdown normalization, the BIOBUZZ export pipeline, and update-packaging validation. Neither needs credentials or network access.
+
+```sh
+swift test
+```
+
+```sh
+python3 -m unittest discover -s tests
+```
+
 
 ## Repo layout
 
 ```text
 FTC_Event_Scout/
-├── Package.swift                    ← SwiftPM manifest and FTCEventScout target
+├── Package.swift                    ← SwiftPM manifest, Sparkle dependency, app and test targets
 ├── Sources/FTCEventScout/           ← native macOS application
-│   ├── App/                         app entry point, scenes, and commands
-│   ├── Models/                      event records and observable app state
-│   ├── Services/                    backend, API, CSV, credentials, tags, preferences
+│   ├── App/                         app entry point, scenes, commands, and lifecycle
+│   ├── Models/                      event records, predictions, and observable app state
+│   ├── Services/                    backend, API, CSV, credentials, tags, predictions, updates
 │   ├── Support/                     shared formatting helpers
 │   ├── Views/                       rankings, highlights, match history, settings
 │   │   └── Components/              reusable SwiftUI components
 │   └── Resources/                   localized strings
-├── script/                          ← build, package, launch, and icon tooling
+├── script/                          ← build, package, DMG, update, launch, and icon tooling
+├── config/sparkle-public-key.txt    Ed25519 public key for verifying updates
 ├── web_server.py                    loopback JSON service used by the app
 ├── scrape.py                        FIRST Events client and match CSV export
 ├── score_breakdown.py               season-specific score detail normalization
@@ -167,6 +198,11 @@ FTC_Event_Scout/
 ├── opr_calc.py                      standard-library least-squares solver
 ├── event_results/                   bundled seed match-detail CSVs
 ├── events_teams_opr/                bundled seed OPR CSVs
-├── tests/                            Swift model/UI support tests and Python score tests
-└── docs/assets/                     README icon and current feature captures
+├── tests/
+│   ├── FTCEventScoutTests/          Swift unit tests
+│   ├── fixtures/                    recorded FIRST Events score payloads
+│   └── test_*.py                    Python score and packaging tests
+└── docs/
+    ├── software-updates.md          release signing and Sparkle publishing guide
+    └── assets/                      README icon and current feature captures
 ```
