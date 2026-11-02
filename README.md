@@ -13,11 +13,11 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/app-demo.png" width="1100" alt="FTC Event Scout showing a sortable event ranking table beside color-coded OPR bar charts">
+  <img src="docs/assets/app-demo.png" width="1100" alt="FTC Event Scout showing the CNHAQ ranking table with color-grouped columns, scouting tags, and stacked top-10 OPR charts">
 </p>
 
 <p align="center">
-  <sub>Live rankings and color-coded OPR comparisons for every team at an event.</sub>
+  <sub>Live rankings, scouting tags, and color-coded OPR comparisons for every team at an event.</sub>
 </p>
 
 **FTC Event Scout** is a native **macOS scouting app** for exploring FIRST Tech Challenge events. It combines live rankings, comparative OPR charts, score highlights, team match history, detailed score breakdowns, and locally stored scouting tags in a SwiftUI interface.
@@ -42,30 +42,108 @@
 
 ## Feature tour
 
-### Compare every OPR metric at a glance
+The screenshots below use the 2025–2026 DECODE event CNHAQ, a 2026–2027 BIOBUZZ preview, and a BIOBUZZ manual practice event.
 
-The Rankings view keeps the sortable team table and five compact bar charts visible together. Direct value labels make the charts readable without hovering, while stable team colors make it easier to follow the same team from OPR to npOPR, Auto, Teleop, and Endgame.
+### Rankings and OPR leaders
 
-Click a table header (or use the **Sort** menu) to change the ranking, then click any chart to move from its top-10 summary to the complete event field.
+The Rankings view keeps the sortable team table and the OPR Leaders panel side by side. The event header above them shows the season, game, and data mode, then team and match counts, the top npOPR team, and the event's high score.
 
-Prefer a single, larger chart? Choose **Single Metric** under **Settings → General → Rankings**. The panel then shows a segmented metric switcher, the leader with the field average, and every team's bar for the selected metric. **All Metrics** restores the stacked cards.
+Click a table header (or use the **Sort** menu) to rank teams by official rank, team number, record, matches played, OPR, OPRc, npOPR, Auto, Teleop, or Endgame; click it again to reverse the order. The sorted column draws a scale bar under each value, sized against the column leader. Blue columns hold record and match counts, red columns hold OPR metrics, and every team keeps the same chart color across all five metrics.
 
-### Open a complete event chart
+By default the OPR Leaders panel stacks a top-10 chart for every metric, as in the screenshot at the top of this page. Choose **Single Metric** under **Settings → General → Rankings** for one larger chart instead: a segmented OPR / npOPR / Tele / Auto / End switcher, the leader with the field average, and a bar for every team.
 
 <p align="center">
-  <img src="docs/assets/opr-all-teams.png" width="720" alt="All-team npOPR chart ordered from the highest value at the top to the lowest value at the bottom">
+  <img src="docs/assets/rankings-single-metric.png" width="900" alt="Rankings view with the Single Metric chart showing npOPR for all 34 CNHAQ teams, led by team 16093 at 120.8 against a 56.7 field average">
 </p>
 
-The expanded chart includes every team with available data, exact values, negative-value handling, and the same cross-metric team colors used in the compact charts.
+<p align="center">
+  <sub>Single Metric layout: one metric at a time, with the leader, the field average, and the full field.</sub>
+</p>
 
-### Follow a typical scouting workflow
+### Full-event chart
+
+Click any compact chart to open it full size. The expanded chart lists every team with a value, from highest at the top to lowest at the bottom, with exact values and negative-value handling.
+
+<p align="center">
+  <img src="docs/assets/opr-all-teams.png" width="600" alt="All-team npOPR chart ordered from the highest value at the top to the lowest value at the bottom">
+</p>
+
+### Team match history
+
+Click a team's row to open its match history. The top of the sheet shows the team's OPR, OPRc, matches used, and outliers removed, with the residual IQR details one click away. Below it, every match the team played lists both alliances, their final and non-penalty scores, the winner, and whether the selected team (marked with a crosshair) won or lost. The event W-L-T record is in the section header.
+
+<p align="center">
+  <img src="docs/assets/team-match-history.png" width="640" alt="Team 16093 match history showing OPR 132.77, OPRc 130.45, a 5-4-0 record, and qualification matches 4 and 16 with alliance scores and winners">
+</p>
+
+### Score breakdowns
+
+Expand **Score Breakdown** under a match to compare Red and Blue by the season's own scoring categories, grouped into Auto, Teleop, Endgame, and penalties. In each numeric row the higher value is emphasized, so the swing between alliances is easy to spot. Breakdowns cover every season from SKYSTONE through BIOBUZZ.
+
+<p align="center">
+  <img src="docs/assets/score-breakdown.png" width="640" alt="DECODE score breakdown for qualification 4 comparing Red and Blue classified artifacts, classifier states, leave, artifact, and pattern points">
+</p>
+
+### Scouting tags
+
+Click the tag button in a team's row to record traits such as `Strong Auto`, `Consistent`, or `Watch Defense`. Each tag has a color. Tags already used at the event appear under **Reuse an Event Tag**, so one click applies the same tag to another team. Tags show in the Rankings table, Highlights, and match history, and they are stored only on your Mac.
+
+<p align="center">
+  <img src="docs/assets/team-tags.png" width="460" alt="Tag editor for team 27648 with Consistent and Watch Defense tags, reusable event tags, and a new-tag form with a color picker">
+</p>
+
+### Highlights
+
+**Highlights** in the sidebar surfaces the event's highest final, non-penalty, Auto, and Teleop alliance scores. Each card names the match, the alliance, and its teams with their tags, and calls out ties.
+
+<p align="center">
+  <img src="docs/assets/highlights.png" width="900" alt="Highlights for CNHAQ: a 305-point final score in Q47, a 229-point non-penalty score, a 61-point auto score tied by two alliances, and a 171-point teleop score">
+</p>
+
+### Match predictions
+
+**Predictions** forecasts every unplayed match on the schedule from OPRc, a residual-filtered OPR (see [OPRc match predictions](#oprc-match-predictions) below for the method). Each forecast shows both alliances' team OPRc values, the predicted scores, the favored alliance, the signed margin, and a data-quality status.
+
+<p align="center">
+  <img src="docs/assets/predictions-upcoming.png" width="900" alt="Predictions page with the OPRc model summary and scheduled qualification 13 and 14 forecasts, with Red favored by 70.8 in qualification 13">
+</p>
+
+<p align="center">
+  <sub>Scheduled matches are forecast as soon as completed matches give every team an OPRc.</sub>
+</p>
+
+You can also enter any two Red and two Blue team numbers under **Custom Match Prediction** to forecast a hypothetical matchup, such as a possible playoff alliance.
+
+<p align="center">
+  <img src="docs/assets/predictions-custom.png" width="900" alt="Custom match prediction pairing 16093 and 19612 against 27648 and 19683, predicting Red by 8.2 with scores of 223.6 to 215.4">
+</p>
+
+### Pre-event previews
+
+When an event has no matches yet, loading its code shows a historical preview. The table lists each registered team's highest OPR from previous seasons on FTCScout, the season it was set, the last three seasons' values, and the rookie year. The header counts teams and rookies and shows the peak and average peak OPR.
+
+<p align="center">
+  <img src="docs/assets/pre-event-preview.png" width="900" alt="Historical preview of the 2026 High Country – Flagstaff Qualifier listing 20 registered teams by highest prior-season OPR, led by team 18291 at 128.13 from 2024">
+</p>
+
+### Settings and in-app updates
+
+**Settings → General** controls whether the last event code is remembered, picks the OPR Leaders layout, and clears cached event data. **FIRST API** stores your FIRST Events username and token. **Updates** shows the installed version and checks for, downloads, and verifies new releases through Sparkle 2, with optional automatic checks and installation on quit.
+
+<p align="center">
+  <img src="docs/assets/settings-general.png" width="400" alt="General settings with the remember-last-event switch, the All Metrics and Single Metric chart layout picker, and event cache storage">
+  &nbsp;
+  <img src="docs/assets/settings-updates.png" width="400" alt="Updates settings showing installed version 1.0.5, automatic check and install switches, and a Check for Updates button">
+</p>
+
+### A typical scouting workflow
 
 1. Select the season in the toolbar and enter the FIRST event code.
 2. Sort the Rankings table by the metric that matters to your scouting question.
-3. Compare the compact graphs or click one to inspect the whole-event distribution.
+3. Compare the compact charts, or click one to see the whole field.
 4. Click a team's row to open its match history, then expand **Score Breakdown** for alliance-level detail.
-5. Use the add-tag control to record traits such as `Strong Auto`, `Consistent`, or `Watch Defense`; reuse the same tag for other teams at that event.
-6. Open **Highlights** in the sidebar to find the matches and alliances behind the event's best scores.
+5. Tag teams with traits like `Strong Auto` or `Watch Defense`, and reuse the same tags across the event.
+6. Open **Highlights** to find the matches behind the event's best scores, and **Predictions** to forecast upcoming matches or possible alliances.
 
 
 ## Manual match entry
@@ -73,6 +151,14 @@ The expanded chart includes every team with available data, exact values, negati
 Use manual events for scrimmages, practice days, or any event whose results are not on FIRST Events yet. Choose **Scout → New Manual Event…** (⇧⌘N), **New Manual Event…** in the sidebar, or **Enter Match Data Manually** on the credentials screen. Pick a name and season; the event is saved in the app's private data on this Mac and survives **Clear cached event data**.
 
 The **Match Data** page lists every match beside an editor for the selected one. Enter the four team numbers, then turn on **Scored** to record the result. Unscored matches act as the schedule, so the Predictions page forecasts them with OPRc. **Next Match** (⌘↩) moves on, adding a match when you reach the end.
+
+<p align="center">
+  <img src="docs/assets/manual-match-data.png" width="900" alt="Match Data page for a BIOBUZZ practice scrimmage listing 16 matches beside the editor for qualification 1, with hive tips, leave and park, pollen and nectar, fouls, and calculated point subtotals for each alliance">
+</p>
+
+<p align="center">
+  <sub>BIOBUZZ matches are entered as field events; every subtotal and the final score are calculated for you.</sub>
+</p>
 
 - **BIOBUZZ** matches record what happened: hive tips, robot leave and park, pollen and nectar left in the hive and garden, each flower's contents from bottom to top, and minor and major fouls. The app calculates every subtotal, the final score, and the Swarm and Pollinator ranking points from the Competition Manual's point values. Any calculated subtotal can be overridden with the pencil button. Choose **Totals Only** for a match when you only know period scores.
 - **Other seasons** record Auto, Driver-Controlled (without endgame), Endgame, and penalty points received; the final score is their sum unless you override it.
