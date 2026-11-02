@@ -79,6 +79,10 @@ private struct SeasonToolbarMenu: View {
             Label(FTCSeason.option(for: event.season).yearRange, systemImage: "calendar")
                 .labelStyle(.titleAndIcon)
                 .foregroundStyle(.secondary)
+                // A plain label gets none of a toolbar button's inset, so its icon would
+                // touch the edge of the toolbar capsule. Match the season menu's inset.
+                .padding(.leading, 8)
+                .padding(.trailing, 4)
                 .help("\(event.name) uses the \(FTCSeason.option(for: event.season).menuLabel) season")
         } else {
             seasonMenu
@@ -107,6 +111,19 @@ private struct EventCodeToolbar: View {
 
     var body: some View {
         HStack(spacing: 6) {
+            if let event = model.activeManualEvent {
+                manualEventButton(event)
+            } else {
+                eventCodeField
+            }
+        }
+        .onChange(of: model.focusToken) { _, _ in
+            isFocused = model.isReady
+        }
+    }
+
+    private var eventCodeField: some View {
+        Group {
             TextField("Event code", text: $model.eventCode)
                 .frame(width: 160)
                 .focused($isFocused)
@@ -123,9 +140,33 @@ private struct EventCodeToolbar: View {
             .help("Load Event")
         }
         .help(model.isReady ? "" : "Add FIRST Events credentials in Settings to load events online")
-        .onChange(of: model.focusToken) { _, _ in
-            isFocused = model.isReady
+    }
+
+    /// A manual event has no event code, so the field's place names the open event.
+    /// Clicking it returns to FIRST Events with the code field ready for typing.
+    private func manualEventButton(_ event: ManualEvent) -> some View {
+        Button {
+            model.showOnlineEvents()
+            // The code field replaces this button on the next update; focus it once it exists.
+            Task { @MainActor in model.focusEventCode() }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "square.and.pencil")
+                    .foregroundStyle(.tint)
+                Text(event.name)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            // As wide as the code field and its Load button, so the toolbar doesn't shift.
+            .frame(width: 186, alignment: .leading)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        // Plain buttons skip the toolbar inset too; keep the icon off the season label.
+        .padding(.leading, 6)
+        .help("Showing \(event.name), a manual event. Click to load a FIRST event instead.")
+        .accessibilityLabel("Manual event, \(event.name)")
+        .accessibilityHint("Switches to FIRST Events so you can enter an event code")
     }
 }
 

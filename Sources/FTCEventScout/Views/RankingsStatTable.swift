@@ -357,6 +357,8 @@ struct RankingsStatTable: View {
                     }
                 }
                 .frame(width: layout.totalWidth, alignment: .leading)
+                // A two-axis scroll view centers short content; keep the header at the top.
+                .frame(minHeight: proxy.size.height, alignment: .top)
             }
         }
         .background(.scoutCard)
@@ -369,12 +371,15 @@ struct RankingsStatTable: View {
                     systemImage: "person.3",
                     description: Text("Teams will appear once the event roster is available.")
                 )
+                .padding(.top, RankingHeaderRow.height)
             }
         }
     }
 }
 
 struct RankingHeaderRow: View {
+    static let height: CGFloat = 38
+
     let columns: [RankingColumn]
     let layout: RankingColumnLayout
     let sortField: RankingSortField
@@ -438,7 +443,7 @@ private struct RankingHeaderCell: View {
         }
         .foregroundStyle(column.color.headerText)
         .padding(.horizontal, column.horizontalInset)
-        .frame(width: width, height: 38, alignment: column.alignment)
+        .frame(width: width, height: RankingHeaderRow.height, alignment: column.alignment)
         .background(column.color.headerFill)
         .overlay(alignment: .bottom) {
             if column.color == .white {

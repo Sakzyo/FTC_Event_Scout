@@ -126,34 +126,20 @@ struct ManualMatchEntryView: View {
                         isImporting = true
                     }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                Table(event.sortedMatches, selection: $selection) {
-                    TableColumn("Match") { match in
-                        Text(match.shortTitle)
-                            .font(.scoutNumeric(size: 12, weight: .semibold))
+                List(selection: $selection) {
+                    ForEach(event.sortedMatches) { match in
+                        ManualMatchRow(match: match, event: event)
+                            .tag(match.id)
+                            .listRowInsets(EdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8))
                     }
-                    .width(min: 44, ideal: 52, max: 70)
-                    TableColumn("Red") { match in
-                        teamText(match.redTeams)
-                            .foregroundStyle(AllianceColor.red.displayColor)
-                    }
-                    TableColumn("Blue") { match in
-                        teamText(match.blueTeams)
-                            .foregroundStyle(AllianceColor.blue.displayColor)
-                    }
-                    TableColumn("Score") { match in
-                        ManualMatchStatusText(match: match, event: event)
-                    }
-                    .width(min: 72, ideal: 88)
                 }
+                .listStyle(.inset)
+                .alternatingRowBackgrounds(.disabled)
                 .onDeleteCommand(perform: deleteSelectedMatch)
             }
         }
-    }
-
-    private func teamText(_ teams: [Int]) -> Text {
-        Text(teams.isEmpty ? "—" : teams.map(\.teamNumberText).joined(separator: " · "))
-            .font(.scoutNumeric(size: 12))
     }
 
     // MARK: Editor
@@ -220,35 +206,83 @@ struct ManualMatchEntryView: View {
     }
 }
 
-private struct ManualMatchStatusText: View {
+/// One match in the schedule, read like an ftcscout match table: the match code beside a
+/// red line and a blue line, each with its teams and score. The winner's score is bold.
+private struct ManualMatchRow: View {
     let match: ManualMatch
     let event: ManualEvent
 
     var body: some View {
-        if !match.validationIssues(in: event).isEmpty {
-            Label("Check", systemImage: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
-                .font(.caption)
-                .help(match.validationIssues(in: event).joined(separator: "\n"))
-        } else if match.isScored {
-            let scores = ManualEventBuilder.scoreBreakdowns(for: match, season: event.season)
-            HStack(spacing: 3) {
-                Text(scoreText(scores.red.finalScore))
-                    .foregroundStyle(AllianceColor.red.displayColor)
-                Text("–").foregroundStyle(.secondary)
-                Text(scoreText(scores.blue.finalScore))
-                    .foregroundStyle(AllianceColor.blue.displayColor)
+        let issues = match.validationIssues(in: event)
+        let scores = match.isScored ? ManualEventBuilder.scoreBreakdowns(for: match, season: event.season) : nil
+        let red = scores?.red.finalScore
+        let blue = scores?.blue.finalScore
+
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(match.shortTitle)
+                    .font(.scoutNumeric(size: 13, weight: .bold))
+                if !issues.isEmpty {
+                    Label("Check", systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                        .help(issues.joined(separator: "\n"))
+                } else if scores == nil {
+                    Text("Scheduled")
+                        .foregroundStyle(.secondary)
+                }
             }
-            .font(.scoutNumeric(size: 12, weight: .semibold))
-        } else {
-            Text("Scheduled")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            .font(.caption2)
+            .frame(width: 62, alignment: .leading)
+
+            VStack(spacing: 2) {
+                allianceLine(.red, teams: match.redTeams, score: red, opponent: blue)
+                allianceLine(.blue, teams: match.blueTeams, score: blue, opponent: red)
+            }
         }
+        .padding(.vertical, 1)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityText(issues: issues, red: red, blue: blue))
     }
 
-    private func scoreText(_ value: Double?) -> String {
-        value.map { String(Int($0)) } ?? "—"
+    private func allianceLine(_ alliance: AllianceColor, teams: [Int], score: Double?, opponent: Double?) -> some View {
+        let isWinner = (score ?? 0) >= (opponent ?? 0) && score != nil
+        return HStack(spacing: 0) {
+            ForEach(0 ..< 2, id: \.self) { index in
+                Text(index < teams.count ? teams[index].teamNumberText : "—")
+                    .foregroundStyle(index < teams.count ? .primary : .tertiary)
+                    .frame(width: 58, alignment: .leading)
+            }
+            Spacer(minLength: 6)
+            Text(score.map { String(Int($0)) } ?? "—")
+                .fontWeight(isWinner ? .bold : .regular)
+                .foregroundStyle(score == nil ? .tertiary : isWinner ? .primary : .secondary)
+        }
+        .font(.scoutNumeric(size: 12))
+        .padding(.leading, 9)
+        .padding(.trailing, 8)
+        .padding(.vertical, 3)
+        .background(alliance.scoutTone.opacity(0.15))
+        .overlay(alignment: .leading) {
+            Rectangle()
+                .fill(alliance.scoutTone)
+                .frame(width: 3)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+    }
+
+    private func accessibilityText(issues: [String], red: Double?, blue: Double?) -> String {
+        var text = "\(match.title). Red \(teamList(match.redTeams)), blue \(teamList(match.blueTeams))."
+        if let red, let blue {
+            text += " Red \(Int(red)), blue \(Int(blue))."
+        } else {
+            text += " Scheduled."
+        }
+        if !issues.isEmpty { text += " Needs checking." }
+        return text
+    }
+
+    private func teamList(_ teams: [Int]) -> String {
+        teams.isEmpty ? "no teams" : teams.map(\.teamNumberText).joined(separator: " and ")
     }
 }
 

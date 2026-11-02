@@ -48,6 +48,7 @@ struct ManualEvent: Codable, Identifiable, Equatable {
         return ManualMatch(
             level: level,
             number: number,
+            isScored: true,
             entryStyle: supportsDetailedEntry ? .detailed : .totals
         )
     }
