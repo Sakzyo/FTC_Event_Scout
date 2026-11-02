@@ -107,6 +107,19 @@ private struct EventCodeToolbar: View {
 
     var body: some View {
         HStack(spacing: 6) {
+            if let event = model.activeManualEvent {
+                manualEventButton(event)
+            } else {
+                eventCodeField
+            }
+        }
+        .onChange(of: model.focusToken) { _, _ in
+            isFocused = model.isReady
+        }
+    }
+
+    private var eventCodeField: some View {
+        Group {
             TextField("Event code", text: $model.eventCode)
                 .frame(width: 160)
                 .focused($isFocused)
@@ -123,9 +136,31 @@ private struct EventCodeToolbar: View {
             .help("Load Event")
         }
         .help(model.isReady ? "" : "Add FIRST Events credentials in Settings to load events online")
-        .onChange(of: model.focusToken) { _, _ in
-            isFocused = model.isReady
+    }
+
+    /// A manual event has no event code, so the field's place names the open event.
+    /// Clicking it returns to FIRST Events with the code field ready for typing.
+    private func manualEventButton(_ event: ManualEvent) -> some View {
+        Button {
+            model.showOnlineEvents()
+            // The code field replaces this button on the next update; focus it once it exists.
+            Task { @MainActor in model.focusEventCode() }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "square.and.pencil")
+                    .foregroundStyle(.tint)
+                Text(event.name)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            // As wide as the code field and its Load button, so the toolbar doesn't shift.
+            .frame(width: 186, alignment: .leading)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .help("Showing \(event.name), a manual event. Click to load a FIRST event instead.")
+        .accessibilityLabel("Manual event, \(event.name)")
+        .accessibilityHint("Switches to FIRST Events so you can enter an event code")
     }
 }
 
