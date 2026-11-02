@@ -79,6 +79,10 @@ private struct SeasonToolbarMenu: View {
             Label(FTCSeason.option(for: event.season).yearRange, systemImage: "calendar")
                 .labelStyle(.titleAndIcon)
                 .foregroundStyle(.secondary)
+                // A plain label gets none of a toolbar button's inset, so its icon would
+                // touch the edge of the toolbar capsule. Match the season menu's inset.
+                .padding(.leading, 8)
+                .padding(.trailing, 4)
                 .help("\(event.name) uses the \(FTCSeason.option(for: event.season).menuLabel) season")
         } else {
             seasonMenu
@@ -158,6 +162,8 @@ private struct EventCodeToolbar: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        // Plain buttons skip the toolbar inset too; keep the icon off the season label.
+        .padding(.leading, 6)
         .help("Showing \(event.name), a manual event. Click to load a FIRST event instead.")
         .accessibilityLabel("Manual event, \(event.name)")
         .accessibilityHint("Switches to FIRST Events so you can enter an event code")
