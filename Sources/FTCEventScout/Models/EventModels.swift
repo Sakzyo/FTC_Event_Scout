@@ -27,6 +27,8 @@ struct FTCSeason: Identifiable, Equatable, Hashable {
 }
 
 enum DashboardSection: String, CaseIterable, Identifiable {
+    /// The manual match editor, shown only while a manual event is open.
+    case matchEntry
     case rankings
     case predictions
     case highlights
@@ -37,6 +39,29 @@ enum DashboardSection: String, CaseIterable, Identifiable {
 enum EventMode: Equatable {
     case live
     case preview
+    /// Matches typed or imported by the user, with OPR calculated in the app.
+    case manual
+
+    /// Live and manual events both have match scores; previews only have team history.
+    var hasMatchData: Bool {
+        self != .preview
+    }
+
+    var sourceTitle: String {
+        switch self {
+        case .live: "Live event data"
+        case .preview: "Historical preview"
+        case .manual: "Manual entry"
+        }
+    }
+
+    var sourceSymbol: String {
+        switch self {
+        case .live: "dot.radiowaves.left.and.right"
+        case .preview: "clock.arrow.circlepath"
+        case .manual: "square.and.pencil"
+        }
+    }
 }
 
 enum EventLoadState: Equatable {

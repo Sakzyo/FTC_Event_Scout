@@ -127,7 +127,11 @@ struct EventService {
     }
 
     func parseMatches(at url: URL, season: Int) throws -> [MatchRecord] {
-        let rows = try CSVParser.rows(from: Data(contentsOf: url))
+        try parseMatches(data: Data(contentsOf: url), season: season)
+    }
+
+    func parseMatches(data: Data, season: Int) throws -> [MatchRecord] {
+        let rows = try CSVParser.rows(from: data)
         return rows.enumerated().map { index, row in
             let series = number(row, keys: ["Series"])
             let matchNumber = number(row, keys: ["Match Number"])
@@ -186,7 +190,7 @@ struct EventService {
             minorFouls: value("Minor Fouls"),
             finalScore: finalScore,
             details: details.isEmpty
-                ? genericBreakdownDetails(
+                ? ScoreBreakdownDetail.generic(
                     season: season,
                     autoScore: autoScore,
                     teleopScore: teleopScore,
@@ -205,42 +209,6 @@ struct EventService {
         let raw = row["\(prefix) Score Breakdown"] ?? ""
         guard let data = raw.data(using: .utf8), !data.isEmpty else { return [] }
         return (try? JSONDecoder().decode([ScoreBreakdownDetail].self, from: data)) ?? []
-    }
-
-    private func genericBreakdownDetails(
-        season: Int,
-        autoScore: Double?,
-        teleopScore: Double?,
-        endgameScore: Double?,
-        foulScore: Double?,
-        finalScore: Double?
-    ) -> [ScoreBreakdownDetail] {
-        func detail(_ id: String, _ label: String, _ value: Double?) -> ScoreBreakdownDetail? {
-            guard let value else { return nil }
-            let display = value.rounded() == value
-                ? String(Int(value))
-                : value.formatted(.number.precision(.fractionLength(2)))
-            return ScoreBreakdownDetail(
-                id: id,
-                label: label,
-                value: display,
-                indent: 0,
-                emphasized: true
-            )
-        }
-
-        let teleopLabel = season <= 2023 ? "Driver Controlled" : "Teleop"
-        return [
-            detail("auto", "Autonomous", autoScore),
-            detail("teleop", teleopLabel, teleopScore),
-            detail(
-                season == 2026 ? "teleop-park-points" : "endgame",
-                season == 2026 ? "Park Points" : "End Game",
-                endgameScore
-            ),
-            detail("penalty", "Penalty Points Awarded", foulScore),
-            detail("final", "Final Score", finalScore),
-        ].compactMap { $0 }
     }
 
     private func number(_ row: [String: String], keys: [String]) -> Double? {
@@ -306,5 +274,44 @@ enum EventServiceError: LocalizedError {
         case .emptyRankings(let eventCode):
             "The generated rankings for \(eventCode) are empty."
         }
+    }
+}
+
+extension ScoreBreakdownDetail {
+    /// Total-only rows for matches without season-specific details.
+    static func generic(
+        season: Int,
+        autoScore: Double?,
+        teleopScore: Double?,
+        endgameScore: Double?,
+        foulScore: Double?,
+        finalScore: Double?
+    ) -> [ScoreBreakdownDetail] {
+        func detail(_ id: String, _ label: String, _ value: Double?) -> ScoreBreakdownDetail? {
+            guard let value else { return nil }
+            let display = value.rounded() == value
+                ? String(Int(value))
+                : value.formatted(.number.precision(.fractionLength(2)))
+            return ScoreBreakdownDetail(
+                id: id,
+                label: label,
+                value: display,
+                indent: 0,
+                emphasized: true
+            )
+        }
+
+        let teleopLabel = season <= 2023 ? "Driver Controlled" : "Teleop"
+        return [
+            detail("auto", "Autonomous", autoScore),
+            detail("teleop", teleopLabel, teleopScore),
+            detail(
+                season == 2026 ? "teleop-park-points" : "endgame",
+                season == 2026 ? "Park Points" : "End Game",
+                endgameScore
+            ),
+            detail("penalty", "Penalty Points Awarded", foulScore),
+            detail("final", "Final Score", finalScore),
+        ].compactMap { $0 }
     }
 }

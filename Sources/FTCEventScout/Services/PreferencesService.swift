@@ -9,6 +9,7 @@ struct PreferencesService {
         static let sortDirection = "sortDirection"
         static let rememberLastEvent = "rememberLastEvent"
         static let oprChartLayout = "oprChartLayout"
+        static let openManualEventID = "openManualEventID"
     }
 
     private let defaults: UserDefaults
@@ -69,5 +70,11 @@ struct PreferencesService {
             return OPRChartLayout(rawValue: rawValue) ?? .stacked
         }
         nonmutating set { defaults.set(newValue.rawValue, forKey: Key.oprChartLayout) }
+    }
+
+    /// The manual event open at quit, reopened on launch; nil when FIRST Events was showing.
+    var openManualEventID: UUID? {
+        get { defaults.string(forKey: Key.openManualEventID).flatMap(UUID.init(uuidString:)) }
+        nonmutating set { defaults.set(newValue?.uuidString, forKey: Key.openManualEventID) }
     }
 }

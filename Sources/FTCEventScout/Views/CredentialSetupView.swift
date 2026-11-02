@@ -69,6 +69,15 @@ struct CredentialSetupView: View {
                 .controlSize(.large)
                 .keyboardShortcut(.defaultAction)
                 .disabled(!model.hasCompleteCredentials)
+
+            VStack(spacing: 6) {
+                Text("No API credentials? Scout on your own.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                Button("Enter Match Data Manually", action: model.beginManualEntry)
+                    .help("Type or import match results and calculate rankings on this Mac")
+            }
+            .padding(.top, 4)
         }
         .padding(40)
         .defaultFocus($focusedField, initialFocus)

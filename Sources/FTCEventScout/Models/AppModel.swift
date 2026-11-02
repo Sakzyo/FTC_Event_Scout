@@ -13,6 +13,12 @@ final class AppModel {
         case failed(String)
     }
 
+    /// Where `currentEvent` comes from: FIRST Events, or a manual event typed on this Mac.
+    enum DataSource: Equatable {
+        case online
+        case manual(UUID)
+    }
+
     var launchState: LaunchState = .idle
     var eventLoadState: EventLoadState = .empty
     var username: String
@@ -57,10 +63,18 @@ final class AppModel {
     private(set) var rankedStandings: [RankedStanding] = []
     private(set) var storedTagGroups: [StoredTeamTags] = []
     private(set) var focusToken = 0
+    private(set) var dataSource: DataSource = .online
+    private(set) var manualEvents: [ManualEvent] = []
+    var isPresentingNewManualEvent = false
+    /// A manual-event save, load, or import failure to show the user.
+    var manualEventError: String?
 
     @ObservationIgnored private let backendService = BackendService()
     @ObservationIgnored private let eventService = EventService()
     @ObservationIgnored private let tagStore = TagStore()
+    @ObservationIgnored private let manualEventStore = ManualEventStore()
+    @ObservationIgnored private var lastOnlineEvent: EventData?
+    @ObservationIgnored private var manualRebuildTask: Task<Void, Never>?
     @ObservationIgnored private let credentialStore: APICredentialStore
     @ObservationIgnored private let preferences: PreferencesService
     @ObservationIgnored private var persistedToken: String
@@ -104,11 +118,40 @@ final class AppModel {
         } catch {
             settingsMessage = "Saved team tags could not be loaded: \(error.localizedDescription)"
         }
+
+        do {
+            let loaded = try manualEventStore.loadAll()
+            manualEvents = loaded.events
+            if !loaded.failures.isEmpty {
+                manualEventError = "Some manual events could not be read: \(loaded.failures.joined(separator: ", "))"
+            }
+        } catch {
+            manualEventError = "Manual events could not be loaded: \(error.localizedDescription)"
+        }
+        if let id = preferences.openManualEventID, manualEvents.contains(where: { $0.id == id }) {
+            dataSource = .manual(id)
+            rebuildManualEventData()
+        }
     }
 
     var isReady: Bool {
         if case .ready = launchState { return true }
         return false
+    }
+
+    var isManualSourceActive: Bool {
+        if case .manual = dataSource { return true }
+        return false
+    }
+
+    /// Manual events work without credentials or the Python helper.
+    var canShowDashboard: Bool {
+        isReady || isManualSourceActive
+    }
+
+    var activeManualEvent: ManualEvent? {
+        guard case .manual(let id) = dataSource else { return nil }
+        return manualEvents.first { $0.id == id }
     }
 
     var hasCompleteCredentials: Bool {
@@ -164,6 +207,7 @@ final class AppModel {
     }
 
     func refreshEvent() {
+        guard !isManualSourceActive else { return }
         loadEvent()
     }
 
@@ -181,6 +225,9 @@ final class AppModel {
             return
         }
 
+        if isManualSourceActive {
+            leaveManualEvent()
+        }
         eventCode = normalized
         eventLoadState = .loading(normalized)
         loadTask?.cancel()
@@ -198,6 +245,7 @@ final class AppModel {
                 )
                 guard !Task.isCancelled, generation == loadGeneration else { return }
                 currentEvent = data
+                lastOnlineEvent = data
                 eventCode = data.eventCode
                 if rememberLastEvent {
                     preferences.lastEventCode = data.eventCode
@@ -214,6 +262,7 @@ final class AppModel {
             } catch {
                 guard !Task.isCancelled, generation == loadGeneration else { return }
                 currentEvent = nil
+                lastOnlineEvent = nil
                 rankedStandings = []
                 eventLoadState = .failed(error.localizedDescription)
             }
@@ -252,9 +301,12 @@ final class AppModel {
         backendService.stop()
         do {
             try ApplicationDirectories.clearCache()
-            currentEvent = nil
-            rankedStandings = []
-            eventLoadState = .empty
+            lastOnlineEvent = nil
+            if !isManualSourceActive {
+                currentEvent = nil
+                rankedStandings = []
+                eventLoadState = .empty
+            }
             settingsMessage = "Cached event data was removed."
             startBackend()
         } catch {
@@ -309,6 +361,144 @@ final class AppModel {
 
     func matches(for teamNumber: Int) -> [MatchRecord] {
         currentEvent?.matchesByTeam[teamNumber] ?? []
+    }
+
+    // MARK: Manual events
+
+    func presentNewManualEvent() {
+        isPresentingNewManualEvent = true
+    }
+
+    /// Opens the most recently edited manual event, or offers to create the first one.
+    func beginManualEntry() {
+        if let latest = manualEvents.max(by: { $0.updatedAt < $1.updatedAt }) {
+            openManualEvent(id: latest.id)
+        } else {
+            presentNewManualEvent()
+        }
+    }
+
+    func createManualEvent(name: String, season: Int) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let event = ManualEvent(name: trimmed.isEmpty ? "Untitled Event" : trimmed, season: season)
+        do {
+            try manualEventStore.save(event)
+            manualEvents.append(event)
+            openManualEvent(id: event.id)
+        } catch {
+            manualEventError = "The manual event could not be saved: \(error.localizedDescription)"
+        }
+    }
+
+    func openManualEvent(id: UUID) {
+        guard manualEvents.contains(where: { $0.id == id }) else { return }
+        if !isManualSourceActive {
+            lastOnlineEvent = currentEvent
+        }
+        // Discard any FIRST Events load still in flight.
+        loadTask?.cancel()
+        loadGeneration += 1
+        dataSource = .manual(id)
+        preferences.openManualEventID = id
+        rebuildManualEventData()
+    }
+
+    /// Returns to FIRST Events, restoring the last online event without refetching it.
+    func showOnlineEvents() {
+        guard isManualSourceActive else { return }
+        leaveManualEvent()
+        eventLoadState = currentEvent == nil ? .empty : .loaded
+    }
+
+    /// Saves an edited manual event right away and refreshes rankings shortly after,
+    /// so typing stays responsive while OPR is recalculated.
+    func updateManualEvent(_ event: ManualEvent) {
+        guard let index = manualEvents.firstIndex(where: { $0.id == event.id }),
+              manualEvents[index] != event else { return }
+        var updated = event
+        updated.updatedAt = Date()
+        manualEvents[index] = updated
+        do {
+            try manualEventStore.save(updated)
+        } catch {
+            manualEventError = "Changes to \(updated.name) could not be saved: \(error.localizedDescription)"
+        }
+        guard activeManualEvent?.id == event.id else { return }
+        manualRebuildTask?.cancel()
+        manualRebuildTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !Task.isCancelled else { return }
+            self?.rebuildManualEventData()
+        }
+    }
+
+    func renameManualEvent(id: UUID, to name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, var event = manualEvents.first(where: { $0.id == id }) else { return }
+        event.name = trimmed
+        updateManualEvent(event)
+    }
+
+    func deleteManualEvent(id: UUID) {
+        guard let event = manualEvents.first(where: { $0.id == id }) else { return }
+        do {
+            try manualEventStore.delete(id: id)
+        } catch {
+            manualEventError = "\(event.name) could not be deleted: \(error.localizedDescription)"
+            return
+        }
+        if activeManualEvent?.id == id {
+            showOnlineEvents()
+        }
+        manualEvents.removeAll { $0.id == id }
+        let tagCount = storedTagGroups.count
+        storedTagGroups.removeAll { $0.eventCode == event.eventCode }
+        if storedTagGroups.count != tagCount {
+            persistTags()
+        }
+    }
+
+    /// Adds matches from a CSV to a manual event, or replaces its matches, and reports
+    /// which rows were skipped.
+    func importManualMatches(
+        from url: URL,
+        into id: UUID,
+        replacing: Bool
+    ) throws -> ManualEventCSV.ImportResult {
+        guard var event = manualEvents.first(where: { $0.id == id }) else {
+            throw CocoaError(.fileNoSuchFile)
+        }
+        let accessing = url.startAccessingSecurityScopedResource()
+        defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+        let data = try Data(contentsOf: url)
+        let result = try ManualEventCSV.importMatches(
+            from: data,
+            season: event.season,
+            existing: replacing ? [] : event.matches
+        )
+        event.matches = replacing ? result.matches : event.matches + result.matches
+        updateManualEvent(event)
+        return result
+    }
+
+    private func leaveManualEvent() {
+        manualRebuildTask?.cancel()
+        dataSource = .online
+        preferences.openManualEventID = nil
+        currentEvent = lastOnlineEvent
+        recomputeRankedStandings()
+    }
+
+    private func rebuildManualEventData() {
+        guard let event = activeManualEvent else { return }
+        currentEvent = ManualEventBuilder.eventData(for: event)
+        eventLoadState = .loaded
+        if !availableSortFields.contains(sortField) {
+            sortField = .nonPenaltyOPR
+            sortDirection = .descending
+        } else {
+            recomputeRankedStandings()
+        }
     }
 
     private func addTag(eventCode: String, teamNumber: Int, tag: TeamTag) {
@@ -375,6 +565,9 @@ final class AppModel {
     private func handleSeasonChange() {
         loadTask?.cancel()
         loadGeneration += 1
+        lastOnlineEvent = nil
+        // The season picker belongs to FIRST Events; a manual event keeps its own season.
+        guard !isManualSourceActive else { return }
         currentEvent = nil
         rankedStandings = []
         eventLoadState = .empty

@@ -294,7 +294,7 @@ struct RankingsStatTable: View {
 
     private var columns: [RankingColumn] {
         switch event.mode {
-        case .live: RankingColumn.live(sortField: model.sortField)
+        case .live, .manual: RankingColumn.live(sortField: model.sortField)
         case .preview: RankingColumn.preview(season: event.season)
         }
     }
