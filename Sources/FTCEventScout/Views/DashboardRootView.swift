@@ -124,6 +124,7 @@ private struct DashboardDetail: View {
                     Divider()
                     if let manualEvent = model.activeManualEvent {
                         ManualMatchEntryView(model: model, event: manualEvent)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .background(.background)
                     }
                 case .rankings:
@@ -135,16 +136,19 @@ private struct DashboardDetail: View {
                 case .predictions:
                     Divider()
                     MatchPredictionsView(event: event)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(.background)
                 case .highlights:
                     Divider()
                     HighlightsView(model: model, event: event)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(.background)
                 }
             } else {
                 EmptyDashboardView(loadState: model.eventLoadState, retry: model.refreshEvent)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(.background)
         .navigationTitle(navigationTitle)
     }

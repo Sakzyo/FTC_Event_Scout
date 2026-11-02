@@ -126,6 +126,7 @@ struct ManualMatchEntryView: View {
                         isImporting = true
                     }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 Table(event.sortedMatches, selection: $selection) {
                     TableColumn("Match") { match in
