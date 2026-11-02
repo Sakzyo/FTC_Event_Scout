@@ -25,7 +25,7 @@ struct RankingsView: View {
                 systemImage: "chart.bar.xaxis",
                 contentPadding: 0
             ) {
-                if event.mode == .live {
+                if event.mode.hasMatchData {
                     Text(model.oprChartLayout == .stacked ? "Top 10 · click to expand" : "All teams")
                 }
             } content: {

@@ -19,7 +19,7 @@ struct ContentView: View {
                     Button(action: model.refreshEvent) {
                         Label("Refresh Event", systemImage: "arrow.clockwise")
                     }
-                    .disabled(!model.isReady || model.eventCode.isEmpty)
+                    .disabled(!model.isReady || model.eventCode.isEmpty || model.isManualSourceActive)
                     .help("Refresh Event (⌘R)")
 
                     SettingsLink {
@@ -28,10 +28,33 @@ struct ContentView: View {
                     .help("Settings (⌘,)")
                 }
             }
+            .sheet(isPresented: $model.isPresentingNewManualEvent) {
+                NewManualEventSheet(model: model)
+            }
+            .alert(
+                "Manual Event Problem",
+                isPresented: Binding(
+                    get: { model.manualEventError != nil },
+                    set: { if !$0 { model.manualEventError = nil } }
+                )
+            ) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(model.manualEventError ?? "")
+            }
     }
 
     @ViewBuilder
     private var content: some View {
+        if model.isManualSourceActive {
+            DashboardRootView(model: model)
+        } else {
+            launchContent
+        }
+    }
+
+    @ViewBuilder
+    private var launchContent: some View {
         switch model.launchState {
         case .idle, .starting:
             LaunchingView()
@@ -40,9 +63,9 @@ struct ContentView: View {
         case .ready:
             DashboardRootView(model: model)
         case .pythonRequired:
-            PythonRequiredView(retry: model.restartBackend)
+            PythonRequiredView(retry: model.restartBackend, enterManually: model.beginManualEntry)
         case .failed(let message):
-            LaunchFailureView(message: message, retry: model.restartBackend)
+            LaunchFailureView(message: message, retry: model.restartBackend, enterManually: model.beginManualEntry)
         }
     }
 }
@@ -51,6 +74,18 @@ private struct SeasonToolbarMenu: View {
     @Bindable var model: AppModel
 
     var body: some View {
+        if let event = model.activeManualEvent {
+            // A manual event's season is fixed when it is created.
+            Label(FTCSeason.option(for: event.season).yearRange, systemImage: "calendar")
+                .labelStyle(.titleAndIcon)
+                .foregroundStyle(.secondary)
+                .help("\(event.name) uses the \(FTCSeason.option(for: event.season).menuLabel) season")
+        } else {
+            seasonMenu
+        }
+    }
+
+    private var seasonMenu: some View {
         Menu {
             Picker("FTC Season", selection: $model.selectedSeason) {
                 ForEach(model.availableSeasons) { season in
@@ -87,6 +122,7 @@ private struct EventCodeToolbar: View {
             .disabled(!model.isReady || model.eventCode.trimmingCharacters(in: .whitespaces).isEmpty)
             .help("Load Event")
         }
+        .help(model.isReady ? "" : "Add FIRST Events credentials in Settings to load events online")
         .onChange(of: model.focusToken) { _, _ in
             isFocused = model.isReady
         }
@@ -95,6 +131,7 @@ private struct EventCodeToolbar: View {
 
 private struct PythonRequiredView: View {
     let retry: () -> Void
+    let enterManually: () -> Void
 
     private let downloadURL = URL(string: "https://www.python.org/downloads/macos/")!
 
@@ -112,6 +149,8 @@ private struct PythonRequiredView: View {
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.defaultAction)
             }
+            Button("Enter Match Data Manually", action: enterManually)
+                .buttonStyle(.link)
         }
     }
 }
@@ -133,6 +172,7 @@ private struct LaunchingView: View {
 private struct LaunchFailureView: View {
     let message: String
     let retry: () -> Void
+    let enterManually: () -> Void
     @Environment(\.openSettings) private var openSettings
 
     var body: some View {
@@ -147,6 +187,8 @@ private struct LaunchFailureView: View {
                 Button("Try Again", action: retry)
                     .buttonStyle(.borderedProminent)
             }
+            Button("Enter Match Data Manually", action: enterManually)
+                .buttonStyle(.link)
         }
     }
 }

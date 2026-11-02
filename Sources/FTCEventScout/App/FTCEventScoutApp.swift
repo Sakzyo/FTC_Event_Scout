@@ -28,7 +28,10 @@ struct FTCEventScoutApp: App {
 
                 Button("Refresh Event", action: model.refreshEvent)
                     .keyboardShortcut("r", modifiers: .command)
-                    .disabled(!model.isReady || model.eventCode.isEmpty)
+                    .disabled(!model.isReady || model.eventCode.isEmpty || model.isManualSourceActive)
+
+                Button("New Manual Event…", action: model.presentNewManualEvent)
+                    .keyboardShortcut("n", modifiers: [.command, .shift])
 
                 Divider()
 

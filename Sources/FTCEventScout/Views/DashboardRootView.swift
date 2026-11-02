@@ -6,7 +6,8 @@ struct DashboardRootView: View {
     @State private var rankingPresentation: RankingPresentation?
 
     private var selectedSection: DashboardSection {
-        DashboardSection(rawValue: selectedSectionRaw) ?? .rankings
+        let section = DashboardSection(rawValue: selectedSectionRaw) ?? .rankings
+        return section == .matchEntry && !model.isManualSourceActive ? .rankings : section
     }
 
     var body: some View {
@@ -21,6 +22,14 @@ struct DashboardRootView: View {
             )
         }
         .navigationSplitViewStyle(.balanced)
+        .onChange(of: model.dataSource) { _, source in
+            // A new, empty manual event opens on its editor; leaving one returns to rankings.
+            if case .manual = source, model.activeManualEvent?.matches.isEmpty == true {
+                selectedSectionRaw = DashboardSection.matchEntry.rawValue
+            } else if source == .online, selectedSectionRaw == DashboardSection.matchEntry.rawValue {
+                selectedSectionRaw = DashboardSection.rankings.rawValue
+            }
+        }
         .sheet(item: $rankingPresentation) { presentation in
             switch presentation {
             case .matches(let selection):
@@ -41,11 +50,13 @@ private struct DashboardSidebar: View {
     var body: some View {
         List(selection: $selection) {
             Section("Event") {
-                ForEach(DashboardSection.allCases) { section in
+                ForEach(sections) { section in
                     DashboardSidebarLabel(section: section)
                         .tag(section.rawValue)
                 }
             }
+
+            ManualEventSourceSection(model: model)
 
             if let event = model.currentEvent {
                 Section("Loaded Data") {
@@ -58,9 +69,10 @@ private struct DashboardSidebar: View {
         .safeAreaInset(edge: .bottom) {
             if let event = model.currentEvent {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(event.eventCode)
-                        .font(.headline.monospaced())
-                    Text("\(FTCSeason.option(for: event.season).yearRange) · \(event.mode == .preview ? "Historical preview" : "Live event data")")
+                    Text(event.mode == .manual ? event.eventName : event.eventCode)
+                        .font(event.mode == .manual ? .headline : .headline.monospaced())
+                        .lineLimit(1)
+                    Text("\(FTCSeason.option(for: event.season).yearRange) · \(event.mode.sourceTitle)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -72,11 +84,21 @@ private struct DashboardSidebar: View {
     }
 }
 
+extension DashboardSidebar {
+    private var sections: [DashboardSection] {
+        model.isManualSourceActive
+            ? DashboardSection.allCases
+            : DashboardSection.allCases.filter { $0 != .matchEntry }
+    }
+}
+
 private struct DashboardSidebarLabel: View {
     let section: DashboardSection
 
     var body: some View {
         switch section {
+        case .matchEntry:
+            Label("Match Data", systemImage: "tablecells")
         case .rankings:
             Label("Rankings", systemImage: "list.number")
         case .predictions:
@@ -98,6 +120,12 @@ private struct DashboardDetail: View {
                 EventHeaderView(event: event, loadState: model.eventLoadState)
                     .padding(12)
                 switch selection {
+                case .matchEntry:
+                    Divider()
+                    if let manualEvent = model.activeManualEvent {
+                        ManualMatchEntryView(model: model, event: manualEvent)
+                            .background(.background)
+                    }
                 case .rankings:
                     RankingsView(
                         model: model,
@@ -118,7 +146,14 @@ private struct DashboardDetail: View {
             }
         }
         .background(.background)
-        .navigationTitle(model.currentEvent?.eventCode ?? "Event")
+        .navigationTitle(navigationTitle)
+    }
+}
+
+extension DashboardDetail {
+    private var navigationTitle: String {
+        guard let event = model.currentEvent else { return "Event" }
+        return event.mode == .manual ? event.eventName : event.eventCode
     }
 }
 
@@ -157,7 +192,7 @@ struct EventHeaderView: View {
                 ScoutInfoRow(systemImage: "calendar") {
                     Text(verbatim: "\(season.yearRange) · \(season.gameName)")
                 }
-                if !event.eventName.isEmpty {
+                if !event.eventName.isEmpty && event.mode != .manual {
                     ScoutInfoRow(systemImage: "number") {
                         Text(verbatim: event.eventCode)
                             .textSelection(.enabled)
@@ -165,8 +200,8 @@ struct EventHeaderView: View {
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel("Event code \(event.eventCode)")
                 }
-                ScoutInfoRow(systemImage: event.mode == .live ? "dot.radiowaves.left.and.right" : "clock.arrow.circlepath") {
-                    Text(event.mode == .live ? "Live event data" : "Historical preview")
+                ScoutInfoRow(systemImage: event.mode.sourceSymbol) {
+                    Text(event.mode.sourceTitle)
                 }
             }
             .font(.system(size: 12))

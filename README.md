@@ -35,6 +35,7 @@
 - **Detailed score breakdowns.** Expand a match to compare red and blue alliance scoring by season-specific Auto, Teleop, Endgame, and penalty categories, from SKYSTONE through BIOBUZZ. The higher value in each numeric row is emphasized so swings are easy to spot.
 - **Event highlights.** Surface the highest final, non-penalty, Auto, and Teleop alliance scores, including ties and the teams responsible.
 - **Local scouting tags.** Add reusable, color-coded notes to teams and see them in rankings, highlights, and match history. Tags stay on the Mac.
+- **Manual match entry.** Create a manual event, type match results on your Mac or import a CSV, and get the same rankings, OPR charts, predictions, highlights, and match history. Manual events work offline, with no FIRST Events credentials or Python.
 - **Pre-event previews.** If an event has not started, use FTCScout history to compare the registered teams' strongest prior-season OPR results.
 - **Signed in-app updates.** Open **Settings → Updates** or **FTC Event Scout → Check for Updates…** to download, verify, install, and relaunch through Sparkle 2. Optional automatic checks and installation on quit are available in Settings.
 
@@ -65,6 +66,22 @@ The expanded chart includes every team with available data, exact values, negati
 4. Click a team's row to open its match history, then expand **Score Breakdown** for alliance-level detail.
 5. Use the add-tag control to record traits such as `Strong Auto`, `Consistent`, or `Watch Defense`; reuse the same tag for other teams at that event.
 6. Open **Highlights** in the sidebar to find the matches and alliances behind the event's best scores.
+
+
+## Manual match entry
+
+Use manual events for scrimmages, practice days, or any event whose results are not on FIRST Events yet. Choose **Scout → New Manual Event…** (⇧⌘N), **New Manual Event…** in the sidebar, or **Enter Match Data Manually** on the credentials screen. Pick a name and season; the event is saved in the app's private data on this Mac and survives **Clear cached event data**.
+
+The **Match Data** page lists every match beside an editor for the selected one. Enter the four team numbers, then turn on **Scored** to record the result. Unscored matches act as the schedule, so the Predictions page forecasts them with OPRc. **Next Match** (⌘↩) moves on, adding a match when you reach the end.
+
+- **BIOBUZZ** matches record what happened: hive tips, robot leave and park, pollen and nectar left in the hive and garden, each flower's contents from bottom to top, and minor and major fouls. The app calculates every subtotal, the final score, and the Swarm and Pollinator ranking points from the Competition Manual's point values. Any calculated subtotal can be overridden with the pencil button. Choose **Totals Only** for a match when you only know period scores.
+- **Other seasons** record Auto, Driver-Controlled (without endgame), Endgame, and penalty points received; the final score is their sum unless you override it.
+
+Rankings use the same least-squares OPR as FIRST Events data, calculated in Swift: total from final scores, npOPR without penalty points received, Auto, Teleop without endgame, and Endgame.
+
+**CSV import and export.** The **CSV** menu imports matches (added to the event, or replacing every match after a confirmation), exports the event, and exports an empty template with the right columns for its season. Columns are `Level` (`Q` or `P`), `Match`, `Game`, `Red1`, `Red2`, `Blue1`, `Blue2`, `Scored` (`Y`/`N`), then per-alliance score columns such as `Red Auto Hive Tips` or `Blue Penalty Received`. BIOBUZZ flower columns list elements bottom to top, separated by `|`, for example `POLLEN|POLLEN|RED_NECTAR`. Rows that can't be imported are skipped and listed with their line numbers. The `Match Details.csv` files the app generates from FIRST Events also import, as Totals Only matches.
+
+Right-click a manual event in the sidebar to rename, export, or delete it. Select **FIRST Events** in the sidebar, or load an event code, to return to online data.
 
 
 ## Supported seasons
@@ -164,7 +181,7 @@ See [Software updates](docs/software-updates.md) for Keychain setup, signing, op
 
 ### Tests
 
-The Swift suite covers models, ranking presentation, score import, predictions, credentials, and the updater. The Python suite covers score-breakdown normalization, the BIOBUZZ export pipeline, and update-packaging validation. Neither needs credentials or network access.
+The Swift suite covers models, ranking presentation, score import, predictions, manual events (BIOBUZZ scoring against recorded FIRST Events payloads, OPR parity with the Python helper, CSV round trips, and storage), credentials, and the updater. The Python suite covers score-breakdown normalization, the BIOBUZZ export pipeline, and update-packaging validation. Neither needs credentials or network access.
 
 ```sh
 swift test
@@ -183,9 +200,10 @@ FTC_Event_Scout/
 ├── Sources/FTCEventScout/           ← native macOS application
 │   ├── App/                         app entry point, scenes, commands, and lifecycle
 │   ├── Models/                      event records, predictions, and observable app state
-│   ├── Services/                    backend, API, CSV, credentials, tags, predictions, updates
+│   ├── Services/                    backend, API, CSV, credentials, tags, predictions, manual events, updates
 │   ├── Support/                     shared formatting helpers
-│   ├── Views/                       rankings, highlights, match history, settings
+│   ├── Views/                       rankings, highlights, match history, manual entry, settings
+│   │   ├── ManualEntry/             manual event sidebar, match editor, CSV import and export
 │   │   └── Components/              reusable SwiftUI components
 │   └── Resources/                   localized strings
 ├── script/                          ← build, package, DMG, update, launch, and icon tooling

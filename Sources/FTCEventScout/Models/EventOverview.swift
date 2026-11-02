@@ -41,7 +41,7 @@ extension EventData {
     /// Four headline figures: live events summarize results, previews summarize team history.
     var overviewStats: [EventOverviewStat] {
         switch mode {
-        case .live:
+        case .live, .manual:
             [teamsStat, matchesStat, topNonPenaltyOPRStat, highScoreStat]
         case .preview:
             [teamsStat, rookiesStat, peakOPRStat, averagePeakOPRStat]
