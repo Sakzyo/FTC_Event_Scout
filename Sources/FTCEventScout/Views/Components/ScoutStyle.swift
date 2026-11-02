@@ -79,6 +79,15 @@ enum ScoutStatColor: Hashable {
     }
 }
 
+extension AllianceColor {
+    /// The alliance's solid ftcscout tone, shared with the red and blue stat columns.
+    var scoutTone: ScoutColor {
+        self == .red
+            ? ScoutColor((244, 67, 54), (204, 47, 47))
+            : ScoutColor((25, 118, 210), (27, 87, 179))
+    }
+}
+
 extension Font {
     /// System text with tabular digits, so numbers line up down a column.
     static func scoutNumeric(size: CGFloat, weight: Font.Weight = .regular) -> Font {

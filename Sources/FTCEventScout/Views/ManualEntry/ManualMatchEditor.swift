@@ -12,7 +12,7 @@ struct ManualMatchEditor: View {
             VStack(alignment: .leading, spacing: 14) {
                 header
                 matchSettings
-                teams
+                scoreboard
 
                 let issues = match.validationIssues(in: event)
                 if !issues.isEmpty {
@@ -80,20 +80,11 @@ struct ManualMatchEditor: View {
         HStack(alignment: .firstTextBaseline) {
             Text(match.title)
                 .font(.title2.weight(.bold))
+                .accessibilityAddTraits(.isHeader)
             Spacer()
-            if match.isScored {
-                let scores = ManualEventBuilder.scoreBreakdowns(for: match, season: event.season)
-                HStack(spacing: 6) {
-                    Text(scoreText(scores.red.finalScore))
-                        .foregroundStyle(AllianceColor.red.displayColor)
-                    Text("–").foregroundStyle(.secondary)
-                    Text(scoreText(scores.blue.finalScore))
-                        .foregroundStyle(AllianceColor.blue.displayColor)
-                }
-                .font(.scoutNumeric(size: 22, weight: .bold))
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Red \(scoreText(scores.red.finalScore)), Blue \(scoreText(scores.blue.finalScore))")
-            }
+            Toggle("Scored", isOn: $match.isScored)
+                .toggleStyle(.switch)
+                .help("Turn off for matches that haven't been played yet")
         }
     }
 
@@ -133,36 +124,119 @@ struct ManualMatchEditor: View {
                 .fixedSize()
                 .help("Totals Only skips the detailed form when you only know period scores")
             }
-
-            Toggle("Scored", isOn: $match.isScored)
-                .toggleStyle(.switch)
         }
         .textFieldStyle(.roundedBorder)
     }
 
-    private var teams: some View {
+    /// The match as the field's audience display shows it: red and blue halves meeting in
+    /// the middle, teams on the outer edges and final scores side by side at the seam.
+    private var scoreboard: some View {
+        let scores = match.isScored ? ManualEventBuilder.scoreBreakdowns(for: match, season: event.season) : nil
+        let red = scores?.red.finalScore
+        let blue = scores?.blue.finalScore
+
+        return HStack(spacing: 0) {
+            ScoreboardSide(
+                alliance: .red,
+                first: $match.red1,
+                second: $match.red2,
+                score: red,
+                isLeading: red != nil && (red ?? 0) >= (blue ?? 0)
+            )
+            ScoreboardSide(
+                alliance: .blue,
+                first: $match.blue1,
+                second: $match.blue2,
+                score: blue,
+                isLeading: blue != nil && (blue ?? 0) >= (red ?? 0)
+            )
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .animation(.scoutMove, value: match.isScored)
+    }
+}
+
+// MARK: - Scoreboard
+
+private struct ScoreboardSide: View {
+    let alliance: AllianceColor
+    @Binding var first: Int?
+    @Binding var second: Int?
+    let score: Double?
+    let isLeading: Bool
+
+    var body: some View {
         HStack(spacing: 12) {
-            teamPanel(.red, first: $match.red1, second: $match.red2)
-            teamPanel(.blue, first: $match.blue1, second: $match.blue2)
+            if alliance == .blue { scoreText }
+            VStack(alignment: alliance == .red ? .leading : .trailing, spacing: 6) {
+                Text(alliance == .red ? "Red" : "Blue")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.85))
+                HStack(spacing: 6) {
+                    ScoreboardTeamField(title: "\(alliance == .red ? "Red" : "Blue") 1", value: $first)
+                    ScoreboardTeamField(title: "\(alliance == .red ? "Red" : "Blue") 2", value: $second)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: alliance == .red ? .leading : .trailing)
+            if alliance == .red { scoreText }
         }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity)
+        .background(alliance.scoutTone)
     }
 
-    private func teamPanel(_ alliance: AllianceColor, first: Binding<Int?>, second: Binding<Int?>) -> some View {
-        HStack(spacing: 8) {
-            Text(alliance == .red ? "Red" : "Blue")
-                .font(.headline)
-                .foregroundStyle(alliance.displayColor)
-                .frame(width: 40, alignment: .leading)
-            TeamNumberField(title: "\(alliance == .red ? "Red" : "Blue") 1", value: first)
-            TeamNumberField(title: "\(alliance == .red ? "Red" : "Blue") 2", value: second)
-        }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .alliancePanelBackground(alliance)
+    private var scoreText: some View {
+        Text(score.map { String(Int($0)) } ?? "–")
+            .font(.system(size: 46, weight: .heavy).width(.compressed).monospacedDigit())
+            .foregroundStyle(.white.opacity(score == nil ? 0.35 : isLeading ? 1 : 0.6))
+            .contentTransition(.numericText())
+            .frame(minWidth: 64, alignment: alliance == .red ? .trailing : .leading)
+            .accessibilityLabel("\(alliance == .red ? "Red" : "Blue") score")
+            .accessibilityValue(score.map { String(Int($0)) } ?? "Not scored")
     }
+}
 
-    private func scoreText(_ value: Double?) -> String {
-        value.map { String(Int($0)) } ?? "—"
+/// A team number plate on the scoreboard: white digits on a translucent well.
+private struct ScoreboardTeamField: View {
+    let title: String
+    @Binding var value: Int?
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 6, style: .continuous)
+        TextField(title, text: Binding(
+            get: { value.map(String.init) ?? "" },
+            set: { value = Int($0.filter(\.isNumber).prefix(6)) }
+        ), prompt: Text("Team"))
+        .textFieldStyle(.plain)
+        .focused($isFocused)
+        .font(.scoutNumeric(size: 15, weight: .semibold))
+        .foregroundStyle(.white)
+        .multilineTextAlignment(.center)
+        .padding(.vertical, 5)
+        .frame(width: 76)
+        .background(.black.opacity(isFocused ? 0.28 : 0.18), in: shape)
+        .overlay(shape.strokeBorder(.white.opacity(isFocused ? 0.9 : 0.25), lineWidth: isFocused ? 1.5 : 1))
+        .animation(.scoutHover, value: isFocused)
+        .accessibilityLabel("\(title) team number")
+    }
+}
+
+private extension View {
+    /// An alliance's form: a plain card with a solid alliance rule along its top edge.
+    func allianceSheet(_ alliance: AllianceColor) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
+        return self
+            .padding(.top, 3)
+            .background(.scoutCard, in: shape)
+            .overlay(alignment: .top) {
+                Rectangle()
+                    .fill(alliance.scoutTone)
+                    .frame(height: 3)
+            }
+            .clipShape(shape)
+            .overlay(shape.strokeBorder(.scoutSeparator, lineWidth: 1))
     }
 }
 
@@ -228,7 +302,7 @@ private struct BiobuzzAllianceForm: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .alliancePanelBackground(alliance)
+        .allianceSheet(alliance)
     }
 }
 
@@ -241,7 +315,7 @@ private struct BiobuzzFlowerEditor: View {
             HStack(alignment: .firstTextBaseline) {
                 Text("Flowers")
                     .font(.headline)
-                Text("Bottom to top · shared by both alliances")
+                Text("Listed bottom to top. Both alliances share them.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -340,7 +414,7 @@ private struct TotalsAllianceForm: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .alliancePanelBackground(alliance)
+        .allianceSheet(alliance)
     }
 }
 
@@ -357,8 +431,8 @@ private struct FormGroup<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title.uppercased())
-                .font(.caption.weight(.semibold))
+            Text(title)
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
             content
         }
@@ -492,21 +566,5 @@ private struct RPBadge: View {
             .padding(.vertical, 3)
             .background((earned ? Color.green : Color.secondary).opacity(0.12), in: Capsule())
             .accessibilityValue(earned ? "Earned" : "Not earned")
-    }
-}
-
-private struct TeamNumberField: View {
-    let title: String
-    @Binding var value: Int?
-
-    var body: some View {
-        TextField(title, text: Binding(
-            get: { value.map(String.init) ?? "" },
-            set: { value = Int($0.filter(\.isNumber).prefix(6)) }
-        ))
-        .textFieldStyle(.roundedBorder)
-        .font(.scoutNumeric(size: 13))
-        .frame(width: 80)
-        .accessibilityLabel("\(title) team number")
     }
 }
