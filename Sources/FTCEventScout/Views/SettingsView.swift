@@ -20,6 +20,11 @@ struct SettingsView: View {
                 .tabItem {
                     Label("Updates", systemImage: "arrow.triangle.2.circlepath")
                 }
+
+            AboutSettingsPane(updater: updater)
+                .tabItem {
+                    Label("About", systemImage: "info.circle")
+                }
         }
         .scenePadding()
         .frame(width: 520, height: 450)
@@ -129,6 +134,45 @@ private struct UpdatesSettingsPane: View {
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+private struct AboutSettingsPane: View {
+    let updater: AppUpdateController
+
+    private static let teamLogo: NSImage? = Bundle.main
+        .url(forResource: "TreemanLogo", withExtension: "png")
+        .flatMap(NSImage.init(contentsOf:))
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Spacer(minLength: 0)
+
+            if let logo = Self.teamLogo {
+                Image(nsImage: logo)
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+                    .frame(width: 160, height: 160)
+                    .accessibilityLabel("Team Treeman 19600 logo")
+            }
+
+            VStack(spacing: 4) {
+                Text("FTC Event Scout")
+                    .font(.title2.weight(.semibold))
+                Text("Version \(updater.currentVersionText)")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            Text("This app is developed by Dylan Xu from FTC team #19600 Treeman.")
+                .multilineTextAlignment(.center)
+                .textSelection(.enabled)
+                .frame(maxWidth: 360)
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
