@@ -144,6 +144,25 @@ ICONSET="$BUILD_ROOT/FTCEventScout.iconset"
 rm -rf "$ICONSET"
 python3 "$ROOT_DIR/script/generate_app_icon.py" "$ICONSET" "$APP_RESOURCES/AppIcon.icns"
 
+# macOS 26 reads light and dark icon variants from an asset catalog compiled from
+# the Icon Composer icon; AppIcon.icns stays the icon for macOS 14 and 15.
+ICON_CATALOG="$BUILD_ROOT/icon-catalog"
+HAS_ICON_CATALOG=false
+if xcrun --find actool >/dev/null 2>&1; then
+  rm -rf "$ICON_CATALOG"
+  mkdir -p "$ICON_CATALOG"
+  xcrun actool "$ROOT_DIR/assets/app-icon/AppIcon.icon" \
+    --compile "$ICON_CATALOG" \
+    --platform macosx \
+    --minimum-deployment-target 14.0 \
+    --app-icon AppIcon \
+    --output-partial-info-plist "$ICON_CATALOG/partial-info.plist" >/dev/null
+  cp "$ICON_CATALOG/Assets.car" "$APP_RESOURCES/Assets.car"
+  HAS_ICON_CATALOG=true
+else
+  echo "Xcode's actool was not found, so the app will have only the light icon. Install Xcode to add the dark-mode icon." >&2
+fi
+
 cat >"$APP_CONTENTS/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -184,7 +203,7 @@ cat >"$APP_CONTENTS/Info.plist" <<PLIST
 </plist>
 PLIST
 
-python3 - "$APP_CONTENTS/Info.plist" "$UPDATE_FEED_URL" "$SPARKLE_PUBLIC_KEY" <<'PY'
+python3 - "$APP_CONTENTS/Info.plist" "$UPDATE_FEED_URL" "$SPARKLE_PUBLIC_KEY" "$HAS_ICON_CATALOG" <<'PY'
 import plistlib
 import sys
 from pathlib import Path
@@ -193,6 +212,8 @@ path = Path(sys.argv[1])
 with path.open("rb") as file:
     info = plistlib.load(file)
 info.update(SUFeedURL=sys.argv[2], SUPublicEDKey=sys.argv[3], SUVerifyUpdateBeforeExtraction=True)
+if sys.argv[4] == "true":
+    info["CFBundleIconName"] = "AppIcon"
 with path.open("wb") as file:
     plistlib.dump(info, file, sort_keys=False)
 PY
