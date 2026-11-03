@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Sakzyo/FTC_Event_Scout/releases/latest/download/FTC-Event-Scout-1.0.6.dmg"><img src="https://img.shields.io/badge/Download-v1.0.6-0A84FF?style=for-the-badge&logo=apple&logoColor=white" alt="Download FTC Event Scout 1.0.6 for macOS"></a>
+  <a href="https://github.com/Sakzyo/FTC_Event_Scout/releases/latest/download/FTC-Event-Scout-1.0.7.dmg"><img src="https://img.shields.io/badge/Download-v1.0.7-0A84FF?style=for-the-badge&logo=apple&logoColor=white" alt="Download FTC Event Scout 1.0.7 for macOS"></a>
 </p>
 
 <p align="center">
@@ -128,7 +128,7 @@ When an event has no matches yet, loading its code shows a pre-event preview. Th
 
 ### Settings and in-app updates
 
-**Settings → General** controls whether the last event code is remembered, picks the OPR Leaders layout, and clears cached event data. **FIRST API** stores your FIRST Events username and token. **Updates** shows the installed version and checks for, downloads, and verifies new releases through Sparkle 2, with optional automatic checks and installation on quit.
+**Settings → General** controls whether the last event code is remembered, picks the OPR Leaders layout, and clears cached event data. **FIRST API** stores your FIRST Events username and token. **Updates** shows the installed version and checks for, downloads, and verifies new releases through Sparkle 2, with optional automatic checks and installation on quit. **About** shows the installed version and credits the app's developer and FTC Team Treeman 19600.
 
 <p align="center">
   <img src="docs/assets/settings-general.png" width="400" alt="General settings with the remember-last-event switch, the All Metrics and Single Metric chart layout picker, and event cache storage">
@@ -224,13 +224,13 @@ OPR and OPRc are scouting estimates, not official FTC rankings. Their additive m
 ### Installation
 
 1. Use macOS 14 or later and make sure Python 3 is installed.
-2. Download the [latest release](https://github.com/Sakzyo/FTC_Event_Scout/releases/latest/download/FTC-Event-Scout-1.0.6.dmg).
+2. Download the [latest release](https://github.com/Sakzyo/FTC_Event_Scout/releases/latest/download/FTC-Event-Scout-1.0.7.dmg).
 3. Open the downloaded DMG and drag **FTC Event Scout** into **Applications**.
 4. Launch the app and enter your FIRST Events API username and token.
 
 Sparkle-enabled builds offer **FTC Event Scout → Check for Updates…** and **Settings → Updates**. Updates are signed ZIP archives installed inside the app, with an **Install and Relaunch** action. Automatic checks and installation on quit can be enabled in Settings. Version 1.0.5 is the first Sparkle-enabled release, so users of 1.0.4 or earlier need to install it manually once; later versions arrive through the in-app updater.
 
-Version 1.0.6 is ad-hoc signed and not notarized. If macOS blocks the first launch, open **System Settings → Privacy & Security** and choose **Open Anyway**.
+Version 1.0.7 is ad-hoc signed and not notarized. If macOS blocks the first launch, open **System Settings → Privacy & Security** and choose **Open Anyway**.
 
 ### Development
 
