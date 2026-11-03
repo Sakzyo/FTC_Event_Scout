@@ -383,83 +383,272 @@ private struct AlliancePanelView: View {
     }
 }
 
+/// Red and blue values flank a center line, like the two halves of the field. On rows where
+/// both values are single numbers, a bar grows from the line toward each alliance, scaled
+/// to the row's larger value, so the winner of each category reads without the numbers.
 private struct ScoreBreakdownGrid: View {
     let rows: [BreakdownRow]
+    /// Zebra stripes alternate within each section and restart after every header or total.
+    let stripes: [Bool]
 
     init(match: MatchRecord) {
         rows = BreakdownRow.rows(for: match)
+        var stripes: [Bool] = []
+        var detailIndex = 0
+        for row in rows {
+            if BreakdownRowStyle(row) == .detail {
+                stripes.append(!detailIndex.isMultiple(of: 2))
+                detailIndex += 1
+            } else {
+                stripes.append(false)
+                detailIndex = 0
+            }
+        }
+        self.stripes = stripes
     }
 
     var body: some View {
-        Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
-            GridRow {
-                Text("Category")
-                    .breakdownCell(alignment: .leading)
-                Text("Red")
-                    .foregroundStyle(.red)
-                    .breakdownCell(alignment: .trailing)
-                    .gridColumnAlignment(.trailing)
-                Text("Blue")
-                    .foregroundStyle(.blue)
-                    .breakdownCell(alignment: .trailing)
-                    .gridColumnAlignment(.trailing)
-            }
-            .font(.caption.weight(.semibold))
-            .textCase(.uppercase)
-
-            Divider()
-                .gridCellUnsizedAxes(.horizontal)
-
+        VStack(spacing: 0) {
+            BreakdownHeaderView()
             ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                if row.emphasized, index != 0 {
-                    Divider()
-                        .gridCellUnsizedAxes(.horizontal)
-                }
-                let isStriped = index.isMultiple(of: 2)
-                let leader = row.leadingAlliance
-                GridRow {
-                    Text(row.label)
-                        .font(row.usesBoldValue ? .title3 : .body)
-                        .fontWeight(
-                            row.usesBoldValue
-                                ? .bold
-                                : (row.emphasized ? .semibold : .regular)
-                        )
-                        .padding(.leading, CGFloat(row.indent) * 14)
-                        .breakdownCell(alignment: .leading, isStriped: isStriped)
-                    BreakdownValueView(
-                        value: row.redValue,
-                        alliance: .red,
-                        usesDecodePatternColors: row.usesDecodePatternColors,
-                        lineLimit: row.valueLineLimit,
-                        isBold: row.usesBoldValue,
-                        comparison: .init(alliance: .red, leader: leader)
-                    )
-                    .breakdownCell(alignment: .trailing, isStriped: isStriped)
-                    BreakdownValueView(
-                        value: row.blueValue,
-                        alliance: .blue,
-                        usesDecodePatternColors: row.usesDecodePatternColors,
-                        lineLimit: row.valueLineLimit,
-                        isBold: row.usesBoldValue,
-                        comparison: .init(alliance: .blue, leader: leader)
-                    )
-                    .breakdownCell(alignment: .trailing, isStriped: isStriped)
-                }
+                BreakdownRowView(row: row, isStriped: stripes[index], isFirst: index == 0)
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .frame(maxWidth: 680, alignment: .leading)
+        .frame(maxWidth: 640)
     }
 }
 
-private extension View {
-    /// Pads a breakdown cell and fills its whole grid cell so zebra stripes form continuous rows.
-    func breakdownCell(alignment: Alignment, isStriped: Bool = false) -> some View {
-        padding(.horizontal, 10)
-            .padding(.vertical, 4)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
-            .background(isStriped ? Color.primary.opacity(0.05) : Color.clear)
+private enum BreakdownMetrics {
+    static let horizontalPadding: CGFloat = 12
+    static let valueWidth: CGFloat = 120
+    static let barWidth: CGFloat = 96
+    static let barGap: CGFloat = 10
+
+    /// Distance from a row's trailing edge to the center line.
+    static var centerLineInset: CGFloat {
+        horizontalPadding + valueWidth + barGap + barWidth / 2
+    }
+}
+
+/// The role a row plays in the score sheet, which sets its type size, spacing, and rules.
+private enum BreakdownRowStyle {
+    /// A scoring period or penalty group that heads its line items.
+    case section
+    case detail
+    /// A period total, set off by a single rule above it.
+    case subtotal
+    /// The final score, set off by a double rule above it.
+    case total
+
+    init(_ row: BreakdownRow) {
+        if row.id == "final" {
+            self = .total
+        } else if row.usesBoldValue, !row.emphasized {
+            self = .subtotal
+        } else {
+            self = row.emphasized ? .section : .detail
+        }
+    }
+
+    var labelFont: Font {
+        switch self {
+        case .detail: .system(size: 13)
+        case .section, .subtotal: .system(size: 13, weight: .semibold)
+        case .total: .system(size: 15, weight: .bold)
+        }
+    }
+
+    var valueSize: CGFloat {
+        switch self {
+        case .detail: 14
+        case .section, .subtotal: 15
+        case .total: 22
+        }
+    }
+
+    /// The higher value sits one weight step above the other.
+    func valueWeight(isHigher: Bool) -> Font.Weight {
+        switch self {
+        case .detail: isHigher ? .semibold : .regular
+        case .section, .subtotal, .total: isHigher ? .bold : .medium
+        }
+    }
+
+    var barHeight: CGFloat {
+        switch self {
+        case .detail: 3
+        case .section, .subtotal: 4
+        case .total: 6
+        }
+    }
+
+    var verticalPadding: CGFloat {
+        switch self {
+        case .detail: 4
+        case .section, .subtotal: 6
+        case .total: 9
+        }
+    }
+}
+
+private struct BreakdownHeaderView: View {
+    var body: some View {
+        HStack(spacing: 0) {
+            Spacer(minLength: 0)
+            Text("Red")
+                .foregroundStyle(AllianceColor.red.displayColor)
+                .frame(width: BreakdownMetrics.valueWidth, alignment: .trailing)
+            Color.clear
+                .frame(width: BreakdownMetrics.barWidth, height: 1)
+                .padding(.horizontal, BreakdownMetrics.barGap)
+            Text("Blue")
+                .foregroundStyle(AllianceColor.blue.displayColor)
+                .frame(width: BreakdownMetrics.valueWidth, alignment: .leading)
+        }
+        .font(.system(size: 11, weight: .semibold))
+        .padding(.horizontal, BreakdownMetrics.horizontalPadding)
+        .padding(.bottom, 6)
+        .background(alignment: .trailing) { BreakdownCenterLine() }
+        .accessibilityHidden(true)
+    }
+}
+
+private struct BreakdownCenterLine: View {
+    var body: some View {
+        Rectangle()
+            .fill(Color.primary.opacity(0.14))
+            .frame(width: 1)
+            .padding(.trailing, BreakdownMetrics.centerLineInset - 0.5)
+    }
+}
+
+private struct BreakdownRowView: View {
+    let row: BreakdownRow
+    let isStriped: Bool
+    let isFirst: Bool
+
+    private var style: BreakdownRowStyle { BreakdownRowStyle(row) }
+
+    var body: some View {
+        let leader = row.leadingAlliance
+        HStack(spacing: 0) {
+            Text(row.label)
+                .font(style.labelFont)
+                .lineLimit(2)
+                .padding(.leading, CGFloat(row.indent) * 14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            BreakdownValueView(
+                value: row.redValue,
+                alliance: .red,
+                row: row,
+                style: style,
+                comparison: .init(alliance: .red, leader: leader)
+            )
+            .frame(width: BreakdownMetrics.valueWidth, alignment: .trailing)
+            BreakdownMarginBar(values: row.numericValues, height: style.barHeight)
+                .padding(.horizontal, BreakdownMetrics.barGap)
+            BreakdownValueView(
+                value: row.blueValue,
+                alliance: .blue,
+                row: row,
+                style: style,
+                comparison: .init(alliance: .blue, leader: leader)
+            )
+            .frame(width: BreakdownMetrics.valueWidth, alignment: .leading)
+        }
+        .padding(.horizontal, BreakdownMetrics.horizontalPadding)
+        .padding(.vertical, style.verticalPadding)
+        .overlay(alignment: .top) { rule }
+        .padding(.top, topSpacing)
+        .background(alignment: .trailing) { BreakdownCenterLine() }
+        .background(isStriped ? AnyShapeStyle(.scoutZebra) : AnyShapeStyle(.clear))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(row.label)
+        .accessibilityValue(accessibilityValue(leader: leader))
+    }
+
+    /// Sections open with a gap; totals take the rule-above-the-sum of a paper score sheet.
+    private var topSpacing: CGFloat {
+        guard !isFirst else { return 0 }
+        switch style {
+        case .section: return 10
+        case .total: return 6
+        case .detail, .subtotal: return 0
+        }
+    }
+
+    @ViewBuilder
+    private var rule: some View {
+        switch style {
+        case .subtotal:
+            Rectangle()
+                .fill(.scoutSeparator)
+                .frame(height: 1)
+        case .total:
+            VStack(spacing: 2) {
+                Rectangle().frame(height: 1)
+                Rectangle().frame(height: 1)
+            }
+            .foregroundStyle(.scoutSeparator)
+        case .section, .detail:
+            EmptyView()
+        }
+    }
+
+    private func accessibilityValue(leader: AllianceColor?) -> String {
+        let red = BreakdownValueView.spokenValue(row.redValue, row: row)
+        let blue = BreakdownValueView.spokenValue(row.blueValue, row: row)
+        var summary = "Red \(red), Blue \(blue)"
+        if let leader {
+            summary += ", \(leader == .red ? "Red" : "Blue") higher"
+        }
+        return summary
+    }
+}
+
+/// Bars grow outward from the center line, each scaled to the larger of the two values.
+private struct BreakdownMarginBar: View {
+    let values: (red: Double, blue: Double)?
+    let height: CGFloat
+
+    private var halfWidth: CGFloat { BreakdownMetrics.barWidth / 2 }
+
+    var body: some View {
+        HStack(spacing: 1) {
+            side(.red)
+                .frame(width: halfWidth - 0.5, alignment: .trailing)
+            side(.blue)
+                .frame(width: halfWidth - 0.5, alignment: .leading)
+        }
+        .frame(width: BreakdownMetrics.barWidth, height: height)
+        .accessibilityHidden(true)
+    }
+
+    @ViewBuilder
+    private func side(_ alliance: AllianceColor) -> some View {
+        if let length = length(for: alliance) {
+            // Flat against the center line, rounded at the tip.
+            let radius = height / 2
+            UnevenRoundedRectangle(
+                topLeadingRadius: alliance == .red ? radius : 0,
+                bottomLeadingRadius: alliance == .red ? radius : 0,
+                bottomTrailingRadius: alliance == .blue ? radius : 0,
+                topTrailingRadius: alliance == .blue ? radius : 0
+            )
+            .fill(alliance.displayColor)
+            .frame(width: length)
+        } else {
+            Color.clear
+        }
+    }
+
+    private func length(for alliance: AllianceColor) -> CGFloat? {
+        guard let values else { return nil }
+        let largest = max(values.red, values.blue)
+        let value = alliance == .red ? values.red : values.blue
+        guard largest > 0, value > 0 else { return nil }
+        return max((halfWidth - 0.5) * CGFloat(value / largest), height)
     }
 }
 
@@ -481,62 +670,124 @@ private enum BreakdownComparison {
 private struct BreakdownValueView: View {
     let value: String?
     let alliance: AllianceColor
-    let usesDecodePatternColors: Bool
-    let lineLimit: Int?
-    let isBold: Bool
+    let row: BreakdownRow
+    let style: BreakdownRowStyle
     let comparison: BreakdownComparison
+
+    private var textAlignment: TextAlignment {
+        alliance == .red ? .trailing : .leading
+    }
 
     var body: some View {
         Group {
-            if value == nil {
+            if let value {
+                if let artifacts = Self.classifierArtifacts(value, row: row) {
+                    ClassifierArtifactsView(artifacts: artifacts)
+                } else if value.trimmingCharacters(in: .whitespaces) == "0" {
+                    // Zeros recede so the categories that scored stand out.
+                    Text(value)
+                        .foregroundStyle(.tertiary)
+                } else {
+                    Text(styledValue(value))
+                }
+            } else {
                 Text("—")
                     .foregroundStyle(.tertiary)
-            } else {
-                Text(styledValue)
             }
         }
-        .font(isBold ? .title : .title3)
-        .monospacedDigit()
-        .fontWeight(fontWeight)
-        .opacity(comparison == .lower ? 0.6 : 1)
-        .lineLimit(lineLimit)
+        .font(.system(
+            size: style.valueSize,
+            weight: style.valueWeight(isHigher: comparison == .higher),
+            design: .rounded
+        ).monospacedDigit())
+        .lineLimit(row.valueLineLimit)
         .minimumScaleFactor(0.75)
-        .multilineTextAlignment(.trailing)
-        .fixedSize(horizontal: false, vertical: lineLimit == nil)
-        .frame(maxWidth: .infinity, alignment: .trailing)
-        .accessibilityLabel(value ?? "Unavailable")
-        .accessibilityValue(comparison == .higher ? "Higher" : "")
+        .multilineTextAlignment(textAlignment)
+        .fixedSize(horizontal: false, vertical: row.valueLineLimit == nil)
     }
 
-    private var fontWeight: Font.Weight {
-        if isBold { return .bold }
-        return comparison == .higher ? .semibold : .regular
-    }
-
-    private var styledValue: AttributedString {
-        guard let value else { return AttributedString() }
-
+    private func styledValue(_ value: String) -> AttributedString {
         var result = AttributedString()
         for segment in ScoreBreakdownTextStyler.segments(
             in: value,
-            usesDecodePatternColors: usesDecodePatternColors
+            usesDecodePatternColors: false
         ) {
             var fragment = AttributedString(segment.text)
-            switch segment.role {
-            case .standard:
-                break
-            case .alliance:
+            if segment.role == .alliance {
                 fragment.foregroundColor = alliance.displayColor
-            case .decodeGreen:
-                fragment.foregroundColor = .green
-            case .decodePurple:
-                fragment.foregroundColor = .purple
-            case .decodeNone:
-                fragment.foregroundColor = .primary
             }
             result.append(fragment)
         }
         return result
+    }
+
+    /// The DECODE classifier's slots, or nil when the row isn't a classifier state
+    /// or holds anything other than green, purple, and empty slots.
+    static func classifierArtifacts(_ value: String, row: BreakdownRow) -> [ClassifierArtifact]? {
+        guard row.usesDecodePatternColors else { return nil }
+        let artifacts = value
+            .split(separator: "/")
+            .map { ClassifierArtifact(rawValue: $0.trimmingCharacters(in: .whitespaces)) }
+        guard !artifacts.isEmpty, !artifacts.contains(nil) else { return nil }
+        return artifacts.compactMap { $0 }
+    }
+
+    static func spokenValue(_ value: String?, row: BreakdownRow) -> String {
+        guard let value else { return "unavailable" }
+        if let artifacts = classifierArtifacts(value, row: row) {
+            return artifacts.map(\.spokenName).joined(separator: ", ")
+        }
+        return value
+    }
+}
+
+private enum ClassifierArtifact: String {
+    case green = "G"
+    case purple = "P"
+    case empty = "N"
+
+    var spokenName: String {
+        switch self {
+        case .green: "green"
+        case .purple: "purple"
+        case .empty: "empty"
+        }
+    }
+}
+
+/// The classifier's artifacts drawn as balls, grouped in threes to read against the motif.
+private struct ClassifierArtifactsView: View {
+    let artifacts: [ClassifierArtifact]
+
+    private var groups: [ArraySlice<ClassifierArtifact>] {
+        stride(from: 0, to: artifacts.count, by: 3).map {
+            artifacts[$0..<min($0 + 3, artifacts.count)]
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 7) {
+            ForEach(Array(groups.enumerated()), id: \.offset) { _, group in
+                HStack(spacing: 3) {
+                    ForEach(Array(group.enumerated()), id: \.offset) { _, artifact in
+                        ball(artifact)
+                    }
+                }
+            }
+        }
+        .frame(height: 16)
+    }
+
+    @ViewBuilder
+    private func ball(_ artifact: ClassifierArtifact) -> some View {
+        switch artifact {
+        case .green:
+            Circle().fill(Color.green).frame(width: 10, height: 10)
+        case .purple:
+            Circle().fill(Color.purple).frame(width: 10, height: 10)
+        case .empty:
+            Circle().strokeBorder(.tertiary, lineWidth: 1).frame(width: 10, height: 10)
+        }
     }
 }
 
@@ -562,12 +813,19 @@ struct BreakdownRow: Identifiable {
     /// The alliance with the strictly higher single numeric value in this row, if any.
     /// Multi-part values such as "3 / 2" or location names are never compared.
     var leadingAlliance: AllianceColor? {
-        guard let red = Self.numericValue(redValue),
-              let blue = Self.numericValue(blueValue),
-              red != blue else {
+        guard let values = numericValues, values.red != values.blue else {
             return nil
         }
-        return red > blue ? .red : .blue
+        return values.red > values.blue ? .red : .blue
+    }
+
+    /// Both alliances' values when each is a single number.
+    var numericValues: (red: Double, blue: Double)? {
+        guard let red = Self.numericValue(redValue),
+              let blue = Self.numericValue(blueValue) else {
+            return nil
+        }
+        return (red, blue)
     }
 
     private static func numericValue(_ value: String?) -> Double? {
@@ -666,3 +924,4 @@ struct BreakdownRow: Identifiable {
             .joined(separator: " / ")
     }
 }
+
