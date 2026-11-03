@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// One column of the Rankings stat table. Columns are grouped by color, as on ftcscout.org:
-/// identity in white, match results and history in blue, and OPR estimates in red.
+/// identity in white, match results and team details in blue, and OPR estimates in red.
 enum RankingColumn: Hashable, Identifiable {
     case order
     case eventRank
@@ -10,8 +10,6 @@ enum RankingColumn: Hashable, Identifiable {
     case record
     case played
     case metric(RankingSortField)
-    case bestSeason
-    case seasonOPR(Int)
     case rookieYear
 
     var id: Self { self }
@@ -26,12 +24,7 @@ enum RankingColumn: Hashable, Identifiable {
         return leading + [.eventRank, .team, .tags, .record, .played] + liveMetrics.map { .metric($0) }
     }
 
-    static func preview(season: Int) -> [RankingColumn] {
-        [
-            .order, .team, .tags, .metric(.highestOPR), .bestSeason,
-            .seasonOPR(season), .seasonOPR(season - 1), .seasonOPR(season - 2), .rookieYear,
-        ]
-    }
+    static let preview: [RankingColumn] = [.order, .team, .tags, .metric(.seasonOPR), .rookieYear]
 
     var title: String {
         switch self {
@@ -42,8 +35,6 @@ enum RankingColumn: Hashable, Identifiable {
         case .record: "Record"
         case .played: "Played"
         case .metric(let field): Self.metricTitle(field)
-        case .bestSeason: "Best Season"
-        case .seasonOPR(let season): String(season)
         case .rookieYear: "Rookie Year"
         }
     }
@@ -59,7 +50,6 @@ enum RankingColumn: Hashable, Identifiable {
         case .metric(.autoOPR): "Auto OPR"
         case .metric(.teleopOPR): "Teleop OPR"
         case .metric(.endgameOPR): "Endgame OPR"
-        case .seasonOPR(let season): "\(season) season OPR"
         default: title
         }
     }
@@ -68,22 +58,19 @@ enum RankingColumn: Hashable, Identifiable {
         switch self {
         case .order, .eventRank, .team, .tags: .white
         case .record, .played, .rookieYear: .blue
-        case .metric(.highestOPR): .blue
-        case .bestSeason: .lightBlue
-        case .metric, .seasonOPR: .red
+        case .metric: .red
         }
     }
 
-    /// The field a header click sorts by. Position, tags, and single seasons don't sort.
+    /// The field a header click sorts by. Position and tags don't sort.
     var sortField: RankingSortField? {
         switch self {
-        case .order, .tags, .seasonOPR: nil
+        case .order, .tags: nil
         case .eventRank: .storedRank
         case .team: .teamNumber
         case .record: .record
         case .played: .played
         case .metric(let field): field
-        case .bestSeason: .bestSeason
         case .rookieYear: .rookieYear
         }
     }
@@ -96,8 +83,7 @@ enum RankingColumn: Hashable, Identifiable {
         case .metric(.totalOPR): "Offensive power rating"
         case .metric(.oprc): "Calculated OPR after one residual-IQR outlier filtering pass"
         case .metric(.nonPenaltyOPR): "OPR without points from opponent penalties"
-        case .metric(.highestOPR): "Highest OPR across past seasons"
-        case .seasonOPR(let season): "Best OPR in the \(season) season"
+        case .metric(.seasonOPR): "OPR on FTCScout from this event's season"
         default: nil
         }
     }
@@ -111,10 +97,8 @@ enum RankingColumn: Hashable, Identifiable {
         case .tags: 116
         case .record: 84
         case .played: 72
-        case .metric(.highestOPR): 108
+        case .metric(.seasonOPR): 108
         case .metric: 82
-        case .bestSeason: 104
-        case .seasonOPR: 74
         case .rookieYear: 104
         }
     }
@@ -124,7 +108,7 @@ enum RankingColumn: Hashable, Identifiable {
     /// Magnitude columns draw a scale bar under each cell while they're the sort column.
     var showsScaleBar: Bool {
         switch self {
-        case .record, .played, .metric, .seasonOPR: true
+        case .record, .played, .metric: true
         default: false
         }
     }
@@ -159,8 +143,6 @@ enum RankingColumn: Hashable, Identifiable {
         case .played: return .count(records[team.teamNumber]?.played ?? 0)
         case .metric(.oprc): return .decimal(metrics[team.teamNumber]?.oprc)
         case .metric(let field): return .decimal(Self.metricValue(field, for: team))
-        case .bestSeason: return .year(team.bestSeason)
-        case .seasonOPR(let season): return .decimal(team.perSeason[String(season)]?.total)
         case .rookieYear: return .year(team.rookieYear)
         }
     }
@@ -173,7 +155,7 @@ enum RankingColumn: Hashable, Identifiable {
         case .autoOPR: "Auto"
         case .teleopOPR: "Teleop"
         case .endgameOPR: "Endgame"
-        case .highestOPR: "Highest OPR"
+        case .seasonOPR: "Season OPR"
         default: field.rawValue
         }
     }
@@ -185,7 +167,7 @@ enum RankingColumn: Hashable, Identifiable {
         case .autoOPR: team.autoOPR
         case .teleopOPR: team.teleopOPR
         case .endgameOPR: team.endgameOPR
-        case .highestOPR: team.highestOPR
+        case .seasonOPR: team.seasonOPR
         default: nil
         }
     }
@@ -295,7 +277,7 @@ struct RankingsStatTable: View {
     private var columns: [RankingColumn] {
         switch event.mode {
         case .live, .manual: RankingColumn.live(sortField: model.sortField)
-        case .preview: RankingColumn.preview(season: event.season)
+        case .preview: RankingColumn.preview
         }
     }
 

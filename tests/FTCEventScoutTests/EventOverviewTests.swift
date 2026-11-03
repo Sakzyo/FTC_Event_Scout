@@ -50,17 +50,17 @@ final class EventOverviewTests: XCTestCase {
         XCTAssertNil(matches?.detail)
     }
 
-    func testPreviewOverviewSummarizesRookiesAndHistoricalPeaks() {
+    func testPreviewOverviewSummarizesRookiesAndSeasonOPR() {
         let event = EventData(
             eventCode: "TEST",
             eventName: "Test Event",
             season: 2025,
             mode: .preview,
             standings: [
-                standing(teamNumber: 300, highest: 90, bestSeason: 2023, rookieYear: 2018),
-                standing(teamNumber: 100, highest: 90, bestSeason: 2024, rookieYear: 2025),
-                standing(teamNumber: 200, highest: 30, rookieYear: 2025),
-                standing(teamNumber: 400, highest: nil, rookieYear: 2020),
+                standing(teamNumber: 300, seasonOPR: 90, rookieYear: 2018),
+                standing(teamNumber: 100, seasonOPR: 90, rookieYear: 2025),
+                standing(teamNumber: 200, seasonOPR: 30, rookieYear: 2025),
+                standing(teamNumber: 400, seasonOPR: nil, rookieYear: 2020),
             ],
             matches: [],
             statusMessage: ""
@@ -68,11 +68,11 @@ final class EventOverviewTests: XCTestCase {
 
         let stats = event.overviewStats
 
-        XCTAssertEqual(stats.map(\.kind), [.teams, .rookies, .peakOPR, .averagePeakOPR])
+        XCTAssertEqual(stats.map(\.kind), [.teams, .rookies, .topSeasonOPR, .averageSeasonOPR])
         XCTAssertEqual(stats[0].value, 4)
         XCTAssertEqual(stats[1].value, 2)
         XCTAssertEqual(stats[2].value, 90)
-        XCTAssertEqual(stats[2].detail, "#100 · 2024", "Ties go to the lower team number")
+        XCTAssertEqual(stats[2].detail, "#100", "Ties go to the lower team number")
         XCTAssertEqual(stats[3].value, 70)
     }
 
@@ -138,8 +138,7 @@ final class EventOverviewTests: XCTestCase {
         teamNumber: Int,
         total: Double? = nil,
         nonPenalty: Double? = nil,
-        highest: Double? = nil,
-        bestSeason: Int? = nil,
+        seasonOPR: Double? = nil,
         rookieYear: Int? = nil
     ) -> TeamStanding {
         TeamStanding(
@@ -151,10 +150,8 @@ final class EventOverviewTests: XCTestCase {
             autoOPR: nil,
             teleopOPR: nil,
             endgameOPR: nil,
-            highestOPR: highest,
-            bestSeason: bestSeason,
-            rookieYear: rookieYear,
-            perSeason: [:]
+            seasonOPR: seasonOPR,
+            rookieYear: rookieYear
         )
     }
 

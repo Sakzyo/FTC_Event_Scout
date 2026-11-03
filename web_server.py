@@ -67,8 +67,8 @@ class OPRAPIHandler(BaseHTTPRequestHandler):
             except Exception as exc:  # noqa: BLE001
                 if _looks_like_no_matches_error(exc):
                     # Event has not started yet (no matches played). Fall back
-                    # to ftcscout.org for a historical-OPR preview of the
-                    # registered teams.
+                    # to ftcscout.org for a preview of the registered teams'
+                    # OPR in the event's season.
                     try:
                         preview = fetch_event_preview(event_code, season)
                     except Exception as preview_exc:  # noqa: BLE001
@@ -76,7 +76,7 @@ class OPRAPIHandler(BaseHTTPRequestHandler):
                             500,
                             {
                                 "error": (
-                                    f"No matches yet for {event_code} and the historical "
+                                    f"No matches yet for {event_code} and the season "
                                     f"OPR preview could not be loaded: {preview_exc}"
                                 )
                             },
@@ -89,7 +89,7 @@ class OPRAPIHandler(BaseHTTPRequestHandler):
                             "mode": "preview",
                             "message": (
                                 f"{event_code} has no matches in the {season} season. Showing each "
-                                f"registered team's highest historical OPR from ftcscout.org."
+                                f"registered team's {season} season OPR from ftcscout.org."
                             ),
                             "eventCode": preview["eventCode"],
                             "eventName": preview["eventName"],

@@ -126,8 +126,7 @@ extension RankingSortField {
         case .teleopOPR: "Teleop OPR"
         case .endgameOPR: "Endgame OPR"
         case .teamName: "Team name"
-        case .highestOPR: "Highest OPR"
-        case .bestSeason: "Best season"
+        case .seasonOPR: "Season OPR"
         case .rookieYear: "Rookie year"
         }
     }
@@ -146,7 +145,7 @@ private struct OPRChartsPanel: View {
             ContentUnavailableView {
                 Label("OPR Charts Unavailable", systemImage: "chart.bar.xaxis")
             } description: {
-                Text("Historical previews do not include live OPR, npOPR, teleop, auto, or endgame estimates.")
+                Text("Pre-event previews do not include event OPR, npOPR, teleop, auto, or endgame estimates.")
             }
         } else if series.allSatisfy({ $0.entries.isEmpty }) {
             ContentUnavailableView {

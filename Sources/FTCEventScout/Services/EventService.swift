@@ -51,15 +51,13 @@ struct EventService {
                 autoOPR: nil,
                 teleopOPR: nil,
                 endgameOPR: nil,
-                highestOPR: team.highestOPR,
-                bestSeason: team.highestOPRSeason,
-                rookieYear: team.rookieYear,
-                perSeason: team.perSeason ?? [:]
+                seasonOPR: team.seasonOPR,
+                rookieYear: team.rookieYear
             )
         }
 
         let message = payload.message
-            ?? "This event has not started. Showing historical OPR for registered teams."
+            ?? "This event has not started. Showing each registered team's OPR from this season."
         return EventData(
             eventCode: payload.eventCode ?? eventCode,
             eventName: payload.eventName ?? "",
@@ -118,10 +116,8 @@ struct EventService {
                 autoOPR: number(row, keys: ["Auto OPR", "OPR Auto"]),
                 teleopOPR: number(row, keys: ["Teleop OPR", "OPR Teleop Only"]),
                 endgameOPR: number(row, keys: ["Endgame OPR", "OPR Endgame"]),
-                highestOPR: nil,
-                bestSeason: nil,
-                rookieYear: nil,
-                perSeason: [:]
+                seasonOPR: nil,
+                rookieYear: nil
             )
         }
     }
@@ -242,17 +238,13 @@ private struct PreviewTeam: Decodable {
     let teamNumber: Int?
     let teamName: String?
     let rookieYear: Int?
-    let highestOPR: Double?
-    let highestOPRSeason: Int?
-    let perSeason: [String: HistoricalSeasonOPR]?
+    let seasonOPR: Double?
 
     private enum CodingKeys: String, CodingKey {
         case teamNumber
         case teamName
         case rookieYear
-        case highestOPR = "highestOpr"
-        case highestOPRSeason = "highestOprSeason"
-        case perSeason
+        case seasonOPR = "seasonOpr"
     }
 }
 

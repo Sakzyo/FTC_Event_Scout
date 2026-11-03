@@ -8,7 +8,7 @@ final class RankingStatTableTests: XCTestCase {
         let ascending: [RankingSortField] = [.storedRank, .teamNumber, .teamName, .rookieYear]
         let descending: [RankingSortField] = [
             .totalOPR, .oprc, .nonPenaltyOPR, .autoOPR, .teleopOPR, .endgameOPR,
-            .highestOPR, .bestSeason, .record, .played,
+            .seasonOPR, .record, .played,
         ]
 
         XCTAssertEqual(Set(ascending + descending), Set(RankingSortField.allCases))
@@ -59,14 +59,12 @@ final class RankingStatTableTests: XCTestCase {
         XCTAssertEqual(columns.last, .metric(.endgameOPR))
     }
 
-    func testPreviewColumnsShowTheLastThreeSeasons() {
-        let columns = RankingColumn.preview(season: 2025)
-
+    func testPreviewColumnsShowOnlyTheEventSeasonOPR() {
         XCTAssertEqual(
-            columns.filter { if case .seasonOPR = $0 { true } else { false } },
-            [.seasonOPR(2025), .seasonOPR(2024), .seasonOPR(2023)]
+            RankingColumn.preview,
+            [.order, .team, .tags, .metric(.seasonOPR), .rookieYear]
         )
-        XCTAssertEqual(RankingColumn.seasonOPR(2024).title, "2024")
+        XCTAssertEqual(RankingColumn.metric(.seasonOPR).title, "Season OPR")
     }
 
     func testColumnsAreGroupedInBlueAndRed() {
@@ -76,9 +74,7 @@ final class RankingStatTableTests: XCTestCase {
         XCTAssertEqual(RankingColumn.played.color, .blue)
         XCTAssertEqual(RankingColumn.rookieYear.color, .blue)
         XCTAssertEqual(RankingColumn.metric(.oprc).color, .red)
-        XCTAssertEqual(RankingColumn.seasonOPR(2024).color, .red)
-        XCTAssertEqual(RankingColumn.metric(.highestOPR).color, .blue)
-        XCTAssertEqual(RankingColumn.bestSeason.color, .lightBlue)
+        XCTAssertEqual(RankingColumn.metric(.seasonOPR).color, .red)
         XCTAssertNil(ScoutStatColor.white.cellTint)
         XCTAssertNotNil(ScoutStatColor.red.cellTint)
     }
@@ -86,7 +82,6 @@ final class RankingStatTableTests: XCTestCase {
     func testOnlyDerivedColumnsAreUnsortable() {
         XCTAssertNil(RankingColumn.order.sortField)
         XCTAssertNil(RankingColumn.tags.sortField)
-        XCTAssertNil(RankingColumn.seasonOPR(2024).sortField)
         XCTAssertEqual(RankingColumn.eventRank.sortField, .storedRank)
         XCTAssertEqual(RankingColumn.team.sortField, .teamNumber)
         XCTAssertEqual(RankingColumn.record.sortField, .record)
@@ -155,8 +150,7 @@ final class RankingStatTableTests: XCTestCase {
             XCTAssertNil(scale, "\(sortField)")
         }
         XCTAssertFalse(RankingColumn.rookieYear.showsScaleBar)
-        XCTAssertFalse(RankingColumn.bestSeason.showsScaleBar)
-        XCTAssertTrue(RankingColumn.metric(.highestOPR).showsScaleBar)
+        XCTAssertTrue(RankingColumn.metric(.seasonOPR).showsScaleBar)
     }
 
     func testScaleWithoutPositiveValuesDrawsEmptyTracks() throws {
@@ -187,7 +181,7 @@ final class RankingStatTableTests: XCTestCase {
     }
 
     func testLayoutKeepsBaseWidthsInNarrowViewports() {
-        let columns = RankingColumn.preview(season: 2025)
+        let columns = RankingColumn.preview
         let layout = RankingColumnLayout(columns: columns, availableWidth: 200, showsTeamNames: true)
 
         XCTAssertEqual(layout.width(for: .team), RankingColumn.team.baseWidth(showsTeamNames: true))
@@ -278,10 +272,8 @@ final class RankingStatTableTests: XCTestCase {
             autoOPR: nil,
             teleopOPR: nil,
             endgameOPR: nil,
-            highestOPR: nil,
-            bestSeason: nil,
-            rookieYear: nil,
-            perSeason: [:]
+            seasonOPR: nil,
+            rookieYear: nil
         )
     }
 

@@ -251,7 +251,7 @@ final class AppModel {
                     preferences.lastEventCode = data.eventCode
                 }
                 if !availableSortFields.contains(sortField) {
-                    sortField = data.mode == .preview ? .highestOPR : .nonPenaltyOPR
+                    sortField = data.mode == .preview ? .seasonOPR : .nonPenaltyOPR
                     sortDirection = .descending
                 } else {
                     recomputeRankedStandings()
@@ -614,10 +614,8 @@ final class AppModel {
             result = compareOptional(lhs.endgameOPR, rhs.endgameOPR)
         case .teamName:
             result = compare(lhs.teamName.localizedLowercase, rhs.teamName.localizedLowercase)
-        case .highestOPR:
-            result = compareOptional(lhs.highestOPR, rhs.highestOPR)
-        case .bestSeason:
-            result = compareOptional(lhs.bestSeason, rhs.bestSeason)
+        case .seasonOPR:
+            result = compareOptional(lhs.seasonOPR, rhs.seasonOPR)
         case .rookieYear:
             result = compareOptional(lhs.rookieYear, rhs.rookieYear)
         case .record:

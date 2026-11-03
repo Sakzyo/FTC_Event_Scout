@@ -1,8 +1,8 @@
-"""Fetch historical OPR data from the ftcscout.org GraphQL API.
+"""Fetch season OPR data from the ftcscout.org GraphQL API.
 
 Used as a fallback for events that have not started yet (no matches played),
-to give the user an at-a-glance preview of the highest OPR each registered
-team has historically achieved across past seasons.
+to give the user an at-a-glance preview of the OPR each registered team has
+achieved so far in the event's own season.
 """
 
 import json
@@ -12,23 +12,9 @@ import urllib.error
 
 FTCSCOUT_GRAPHQL_URL = "https://api.ftcscout.org/graphql"
 DEFAULT_SEASON = 2025
-MIN_HISTORICAL_SEASON = 2019
 
 
-def _historical_seasons_through(season):
-    return list(range(int(season), MIN_HISTORICAL_SEASON - 1, -1))
-
-
-def _build_quickstats_alias_block(historical_seasons):
-    return "\n".join(
-        f"            s{season}: quickStats(season: {season}) {{ "
-        f"tot {{ value rank }} auto {{ value }} dc {{ value }} }}"
-        for season in historical_seasons
-    )
-
-
-def _build_event_query(event_code, season, historical_seasons):
-    quickstats_block = _build_quickstats_alias_block(historical_seasons)
+def _build_event_query(event_code, season):
     return (
         "query {\n"
         f'  event: eventByCode(season: {int(season)}, code: "{event_code}") {{\n'
@@ -44,7 +30,7 @@ def _build_event_query(event_code, season, historical_seasons):
         "        number\n"
         "        name\n"
         "        rookieYear\n"
-        f"{quickstats_block}\n"
+        f"        quickStats(season: {int(season)}) {{ tot {{ value }} }}\n"
         "      }\n"
         "    }\n"
         "  }\n"
@@ -85,48 +71,19 @@ def _post_graphql(query, timeout=20):
     return payload.get("data") or {}
 
 
-def _team_summary(team_entry, historical_seasons):
+def _team_summary(team_entry):
     team = team_entry.get("team") or {}
-    number = team.get("number") or team_entry.get("teamNumber")
-    name = team.get("name") or ""
-    rookie_year = team.get("rookieYear")
-
-    per_season = {}
-    highest_value = None
-    highest_season = None
-    highest_rank = None
-    for season in historical_seasons:
-        block = team.get(f"s{season}")
-        if not block:
-            continue
-        tot = block.get("tot") or {}
-        value = tot.get("value")
-        if value is None:
-            continue
-        per_season[str(season)] = {
-            "tot": value,
-            "rank": tot.get("rank"),
-            "auto": (block.get("auto") or {}).get("value"),
-            "dc": (block.get("dc") or {}).get("value"),
-        }
-        if highest_value is None or value > highest_value:
-            highest_value = value
-            highest_season = season
-            highest_rank = tot.get("rank")
-
+    quick_stats = team.get("quickStats") or {}
     return {
-        "teamNumber": number,
-        "teamName": name,
-        "rookieYear": rookie_year,
-        "highestOpr": highest_value,
-        "highestOprSeason": highest_season,
-        "highestOprRank": highest_rank,
-        "perSeason": per_season,
+        "teamNumber": team.get("number") or team_entry.get("teamNumber"),
+        "teamName": team.get("name") or "",
+        "rookieYear": team.get("rookieYear"),
+        "seasonOpr": (quick_stats.get("tot") or {}).get("value"),
     }
 
 
 def fetch_event_preview(event_code, season=DEFAULT_SEASON):
-    """Return a dict describing an event's registered teams and historical OPR.
+    """Return a dict describing an event's registered teams and their OPR in its season.
 
     Shape:
         {
@@ -142,10 +99,7 @@ def fetch_event_preview(event_code, season=DEFAULT_SEASON):
                     "teamNumber": int,
                     "teamName": str,
                     "rookieYear": int | None,
-                    "highestOpr": float | None,
-                    "highestOprSeason": int | None,
-                    "highestOprRank": int | None,
-                    "perSeason": { "2025": {...}, ... },
+                    "seasonOpr": float | None,
                 },
                 ...
             ],
@@ -155,8 +109,7 @@ def fetch_event_preview(event_code, season=DEFAULT_SEASON):
     if not safe_event:
         raise ValueError("event_code is required.")
 
-    historical_seasons = _historical_seasons_through(season)
-    data = _post_graphql(_build_event_query(safe_event, season, historical_seasons))
+    data = _post_graphql(_build_event_query(safe_event, season))
     event = data.get("event")
     if not event:
         raise RuntimeError(
@@ -164,9 +117,9 @@ def fetch_event_preview(event_code, season=DEFAULT_SEASON):
         )
 
     team_entries = event.get("teams") or []
-    teams = [_team_summary(entry, historical_seasons) for entry in team_entries]
+    teams = [_team_summary(entry) for entry in team_entries]
     teams.sort(
-        key=lambda t: (t["highestOpr"] is None, -(t["highestOpr"] or 0.0))
+        key=lambda t: (t["seasonOpr"] is None, -(t["seasonOpr"] or 0.0))
     )
 
     return {

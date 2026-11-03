@@ -54,7 +54,6 @@ enum ScoutStatColor: Hashable {
     case white
     case red
     case blue
-    case lightBlue
 
     /// The solid group color; nil for identity columns.
     var tone: ScoutColor? {
@@ -62,7 +61,6 @@ enum ScoutStatColor: Hashable {
         case .white: nil
         case .red: ScoutColor((244, 67, 54), (204, 47, 47))
         case .blue: ScoutColor((25, 118, 210), (27, 87, 179))
-        case .lightBlue: ScoutColor((33, 150, 243), (25, 118, 210))
         }
     }
 

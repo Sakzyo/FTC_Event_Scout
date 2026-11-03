@@ -108,10 +108,8 @@ enum ManualEventBuilder {
                 autoOPR: auto[team],
                 teleopOPR: teleop[team],
                 endgameOPR: endgame[team],
-                highestOPR: nil,
-                bestSeason: nil,
-                rookieYear: nil,
-                perSeason: [:]
+                seasonOPR: nil,
+                rookieYear: nil
             )
         }
     }
