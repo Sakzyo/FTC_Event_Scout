@@ -26,7 +26,7 @@
 ## Features
 
 - **Live event rankings.** Choose an FTC season, enter an event code, and load every registered team and scored match from FIRST Events.
-- **Event header card.** A compact card shows the season, game, and data mode, followed by inline stats: team and match counts, the top npOPR team, and the high score for live events, or rookies and historical peak OPR for previews.
+- **Event header card.** A compact card shows the season, game, and data mode, followed by inline stats: team and match counts, the top npOPR team, and the high score for live events, or rookies and the top and average season OPR for previews.
 - **FTCScout-style rankings table.** Color-grouped columns (blue for record, matches played, and team history; red for OPR metrics) sit under a pinned header with zebra rows. Click any header to sort by official rank, team number, qualification W-L-T record, matches played, total OPR, calculated OPRc, non-penalty OPR (npOPR), Auto, Teleop, or Endgame OPR; click it again to reverse. The sorted column draws a scale bar under each value, sized against the column leader (records by win rate). Columns stretch to fill wide windows and scroll horizontally in narrow ones.
 - **Interactive OPR charts.** Compare OPR, npOPR, Teleop, Auto, and Endgame beside the rankings table, either as stacked top-10 cards for every metric or as one metric at a time with a leader readout and the full field. Switch layouts in **Settings → General → Rankings**. Every metric is ordered from highest at the top to lowest at the bottom.
 - **OPRc match predictions.** Recalculate a residual-filtered offensive-power estimate from completed matches, then compare expected alliance scores, winner, signed margin, and data quality for every upcoming match or a custom four-team matchup.
@@ -36,7 +36,7 @@
 - **Event highlights.** Surface the highest final, non-penalty, Auto, and Teleop alliance scores, including ties and the teams responsible.
 - **Local scouting tags.** Add reusable, color-coded notes to teams and see them in rankings, highlights, and match history. Tags stay on the Mac.
 - **Manual match entry.** Create a manual event, type match results on your Mac or import a CSV, and get the same rankings, OPR charts, predictions, highlights, and match history. Manual events work offline, with no FIRST Events credentials or Python.
-- **Pre-event previews.** If an event has not started, use FTCScout history to compare the registered teams' strongest prior-season OPR results.
+- **Pre-event previews.** If an event has not started, use FTCScout data to compare the registered teams' OPR from the event's own season.
 - **Signed in-app updates.** Open **Settings → Updates** or **FTC Event Scout → Check for Updates…** to download, verify, install, and relaunch through Sparkle 2. Optional automatic checks and installation on quit are available in Settings.
 
 
@@ -120,7 +120,7 @@ You can also enter any two Red and two Blue team numbers under **Custom Match Pr
 
 ### Pre-event previews
 
-When an event has no matches yet, loading its code shows a historical preview. The table lists each registered team's highest OPR from previous seasons on FTCScout, the season it was set, the last three seasons' values, and the rookie year. The header counts teams and rookies and shows the peak and average peak OPR.
+When an event has no matches yet, loading its code shows a pre-event preview. The table lists each registered team's OPR on FTCScout from the event's season, along with its rookie year; teams that have not played yet that season show no OPR. The header counts teams and rookies and shows the top and average season OPR.
 
 <p align="center">
   <img src="docs/assets/pre-event-preview.png" width="900" alt="Historical preview of the 2026 High Country – Flagstaff Qualifier listing 20 registered teams by highest prior-season OPR, led by team 18291 at 128.13 from 2024">
@@ -192,7 +192,7 @@ Every season gets the same Auto, Teleop, Endgame, penalty, and final totals for 
 
 Choose a season and enter an event code; a loopback-only Python helper fetches FIRST Events data, generates CSVs, and calculates least-squares OPR estimates for total, non-penalty, autonomous, teleop, and endgame performance. The Swift calculation layer also derives OPRc and upcoming-match predictions once whenever refreshed event data is loaded. The app turns those results into sortable tables so scouts can compare teams and inspect individual matches.
 
-The visible application is entirely native SwiftUI, while the Python helper uses only the standard library and listens on `127.0.0.1`. FIRST Events credentials are stored in private app data on the Mac; the unencrypted token file is restricted to the current user. When an event has not started, FTCScout data provides a historical preview of its registered teams.
+The visible application is entirely native SwiftUI, while the Python helper uses only the standard library and listens on `127.0.0.1`. FIRST Events credentials are stored in private app data on the Mac; the unencrypted token file is restricted to the current user. When an event has not started, FTCScout data provides a season OPR preview of its registered teams.
 
 
 ## OPRc match predictions
@@ -297,7 +297,7 @@ FTC_Event_Scout/
 ├── web_server.py                    loopback JSON service used by the app
 ├── scrape.py                        FIRST Events client and match CSV export
 ├── score_breakdown.py               season-specific score detail normalization
-├── historical_opr.py                FTCScout pre-event history client
+├── historical_opr.py                FTCScout pre-event season OPR client
 ├── calculate_opr_from_csv.py        OPR metric preparation and CSV export
 ├── opr_calc.py                      standard-library least-squares solver
 ├── event_results/                   bundled seed match-detail CSVs

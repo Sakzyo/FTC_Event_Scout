@@ -8,8 +8,8 @@ struct EventOverviewStat: Identifiable, Equatable {
         case topNonPenaltyOPR
         case highScore
         case rookies
-        case peakOPR
-        case averagePeakOPR
+        case topSeasonOPR
+        case averageSeasonOPR
     }
 
     let kind: Kind
@@ -31,20 +31,20 @@ struct EventOverviewStat: Identifiable, Equatable {
         case .topNonPenaltyOPR: "chart.bar.fill"
         case .highScore: "trophy.fill"
         case .rookies: "leaf.fill"
-        case .peakOPR: "chart.line.uptrend.xyaxis"
-        case .averagePeakOPR: "chart.bar.fill"
+        case .topSeasonOPR: "chart.line.uptrend.xyaxis"
+        case .averageSeasonOPR: "chart.bar.fill"
         }
     }
 }
 
 extension EventData {
-    /// Four headline figures: live events summarize results, previews summarize team history.
+    /// Four headline figures: live events summarize results, previews summarize the season so far.
     var overviewStats: [EventOverviewStat] {
         switch mode {
         case .live, .manual:
             [teamsStat, matchesStat, topNonPenaltyOPRStat, highScoreStat]
         case .preview:
-            [teamsStat, rookiesStat, peakOPRStat, averagePeakOPRStat]
+            [teamsStat, rookiesStat, topSeasonOPRStat, averageSeasonOPRStat]
         }
     }
 
@@ -115,38 +115,33 @@ extension EventData {
         )
     }
 
-    private var peakOPRStat: EventOverviewStat {
+    private var topSeasonOPRStat: EventOverviewStat {
         let leader = standings
-            .filter { $0.highestOPR?.isFinite == true }
+            .filter { $0.seasonOPR?.isFinite == true }
             .max { lhs, rhs in
-                if lhs.highestOPR == rhs.highestOPR {
+                if lhs.seasonOPR == rhs.seasonOPR {
                     return lhs.teamNumber > rhs.teamNumber
                 }
-                return (lhs.highestOPR ?? 0) < (rhs.highestOPR ?? 0)
+                return (lhs.seasonOPR ?? 0) < (rhs.seasonOPR ?? 0)
             }
-        let detail = leader.map { standing in
-            ["#\(standing.teamNumber.teamNumberText)", standing.bestSeason.map(String.init)]
-                .compactMap { $0 }
-                .joined(separator: " · ")
-        }
         return EventOverviewStat(
-            kind: .peakOPR,
-            label: "Peak OPR",
-            accessibilityLabel: "Highest historical OPR",
-            value: leader?.highestOPR,
+            kind: .topSeasonOPR,
+            label: "Top OPR",
+            accessibilityLabel: "Top season OPR",
+            value: leader?.seasonOPR,
             fractionLength: 1 ... 1,
-            detail: detail,
+            detail: leader.map { "#\($0.teamNumber.teamNumberText)" },
             accessibilityDetail: leader.map { "Team \($0.teamNumber.teamNumberText)" }
         )
     }
 
-    private var averagePeakOPRStat: EventOverviewStat {
-        let values = standings.compactMap(\.highestOPR).filter(\.isFinite)
+    private var averageSeasonOPRStat: EventOverviewStat {
+        let values = standings.compactMap(\.seasonOPR).filter(\.isFinite)
         let average = values.isEmpty ? nil : values.reduce(0, +) / Double(values.count)
         return EventOverviewStat(
-            kind: .averagePeakOPR,
-            label: "Avg peak OPR",
-            accessibilityLabel: "Average highest historical OPR",
+            kind: .averageSeasonOPR,
+            label: "Avg OPR",
+            accessibilityLabel: "Average season OPR",
             value: average,
             fractionLength: 1 ... 1,
             detail: nil,

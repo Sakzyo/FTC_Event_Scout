@@ -37,10 +37,8 @@ final class RankingPresentationTests: XCTestCase {
             autoOPR: 27.6,
             teleopOPR: 104.2,
             endgameOPR: 7.2,
-            highestOPR: nil,
-            bestSeason: nil,
-            rookieYear: nil,
-            perSeason: [:]
+            seasonOPR: nil,
+            rookieYear: nil
         )
     }
 }

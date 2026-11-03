@@ -8,7 +8,7 @@ struct MatchPredictionsView: View {
             ContentUnavailableView {
                 Label("Predictions Unavailable", systemImage: "sparkles.rectangle.stack")
             } description: {
-                Text("This historical preview has no current match schedule or completed scores for calculating OPRc.")
+                Text("This pre-event preview has no current match schedule or completed scores for calculating OPRc.")
             }
         } else {
             ScrollView {

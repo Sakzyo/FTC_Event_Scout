@@ -50,7 +50,7 @@ enum EventMode: Equatable {
     var sourceTitle: String {
         switch self {
         case .live: "Live event data"
-        case .preview: "Historical preview"
+        case .preview: "Pre-event preview"
         case .manual: "Manual entry"
         }
     }
@@ -81,8 +81,7 @@ enum RankingSortField: String, CaseIterable, Identifiable {
     case teleopOPR
     case endgameOPR
     case teamName
-    case highestOPR
-    case bestSeason
+    case seasonOPR
     case rookieYear
     case record
     case played
@@ -95,8 +94,7 @@ enum RankingSortField: String, CaseIterable, Identifiable {
     ]
 
     static let previewFields: [RankingSortField] = [
-        .storedRank, .teamNumber, .teamName, .highestOPR,
-        .bestSeason, .rookieYear,
+        .storedRank, .teamNumber, .teamName, .seasonOPR, .rookieYear,
     ]
 
     /// The direction a column sorts in when its header is first clicked:
@@ -105,7 +103,7 @@ enum RankingSortField: String, CaseIterable, Identifiable {
         switch self {
         case .storedRank, .teamNumber, .teamName, .rookieYear: .ascending
         case .totalOPR, .oprc, .nonPenaltyOPR, .autoOPR, .teleopOPR, .endgameOPR,
-             .highestOPR, .bestSeason, .record, .played: .descending
+             .seasonOPR, .record, .played: .descending
         }
     }
 
@@ -127,35 +125,6 @@ enum SortDirection: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-struct HistoricalSeasonOPR: Decodable, Equatable, Hashable {
-    let total: Double?
-    let rank: Int?
-    let auto: Double?
-    let driverControlled: Double?
-
-    private enum CodingKeys: String, CodingKey {
-        case total = "tot"
-        case rank
-        case auto
-        case driverControlled = "dc"
-    }
-
-    init(total: Double?, rank: Int?, auto: Double?, driverControlled: Double?) {
-        self.total = total
-        self.rank = rank
-        self.auto = auto
-        self.driverControlled = driverControlled
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        total = try container.decodeIfPresent(Double.self, forKey: .total)
-        rank = try container.decodeIfPresent(Int.self, forKey: .rank)
-        auto = try container.decodeIfPresent(Double.self, forKey: .auto)
-        driverControlled = try container.decodeIfPresent(Double.self, forKey: .driverControlled)
-    }
-}
-
 struct TeamStanding: Identifiable, Equatable, Hashable {
     let teamNumber: Int
     let storedRank: Int
@@ -165,10 +134,9 @@ struct TeamStanding: Identifiable, Equatable, Hashable {
     let autoOPR: Double?
     let teleopOPR: Double?
     let endgameOPR: Double?
-    let highestOPR: Double?
-    let bestSeason: Int?
+    /// Previews only: the team's FTCScout OPR from the event's own season.
+    let seasonOPR: Double?
     let rookieYear: Int?
-    let perSeason: [String: HistoricalSeasonOPR]
 
     var id: Int { teamNumber }
 }

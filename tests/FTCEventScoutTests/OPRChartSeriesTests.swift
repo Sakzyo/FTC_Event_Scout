@@ -81,10 +81,8 @@ final class OPRChartSeriesTests: XCTestCase {
             autoOPR: auto,
             teleopOPR: teleop,
             endgameOPR: endgame,
-            highestOPR: nil,
-            bestSeason: nil,
-            rookieYear: nil,
-            perSeason: [:]
+            seasonOPR: nil,
+            rookieYear: nil
         )
     }
 }
