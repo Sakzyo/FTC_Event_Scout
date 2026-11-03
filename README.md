@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Sakzyo/FTC_Event_Scout/releases/latest/download/FTC-Event-Scout-1.0.5.dmg"><img src="https://img.shields.io/badge/Download-v1.0.5-0A84FF?style=for-the-badge&logo=apple&logoColor=white" alt="Download FTC Event Scout 1.0.5 for macOS"></a>
+  <a href="https://github.com/Sakzyo/FTC_Event_Scout/releases/latest/download/FTC-Event-Scout-1.0.6.dmg"><img src="https://img.shields.io/badge/Download-v1.0.6-0A84FF?style=for-the-badge&logo=apple&logoColor=white" alt="Download FTC Event Scout 1.0.6 for macOS"></a>
 </p>
 
 <p align="center">
@@ -42,7 +42,7 @@
 
 ## Feature tour
 
-The screenshots below use the 2025–2026 DECODE event CNHAQ, a 2026–2027 BIOBUZZ preview, and a BIOBUZZ manual practice event.
+The screenshots below use the 2025–2026 DECODE event CNHAQ, a 2026–2027 BIOBUZZ pre-event preview, and a BIOBUZZ manual practice event.
 
 ### Rankings and OPR leaders
 
@@ -78,10 +78,10 @@ Click a team's row to open its match history. The top of the sheet shows the tea
 
 ### Score breakdowns
 
-Expand **Score Breakdown** under a match to compare Red and Blue by the season's own scoring categories, grouped into Auto, Teleop, Endgame, and penalties. In each numeric row the higher value is emphasized, so the swing between alliances is easy to spot. Breakdowns cover every season from SKYSTONE through BIOBUZZ.
+Expand **Score Breakdown** under a match to compare Red and Blue by the season's own scoring categories, grouped into Auto, Teleop, Endgame, and penalties. The sheet reads head to head: Red and Blue values sit on either side of a center line, and on numeric rows a bar grows toward each alliance, so the winner of every category is clear at a glance. DECODE classifier states appear as purple and green artifacts in groups of three, zeros are dimmed, and subtotals and the final score are ruled off like a paper score sheet. Breakdowns cover every season from SKYSTONE through BIOBUZZ.
 
 <p align="center">
-  <img src="docs/assets/score-breakdown.png" width="640" alt="DECODE score breakdown for qualification 4 comparing Red and Blue classified artifacts, classifier states, leave, artifact, and pattern points">
+  <img src="docs/assets/score-breakdown.png" width="640" alt="DECODE score breakdown for qualification 4 with Red and Blue values on either side of a center line, bars toward the leading alliance, and classifier states drawn as purple and green artifacts">
 </p>
 
 ### Scouting tags
@@ -123,7 +123,7 @@ You can also enter any two Red and two Blue team numbers under **Custom Match Pr
 When an event has no matches yet, loading its code shows a pre-event preview. The table lists each registered team's OPR on FTCScout from the event's season, along with its rookie year; teams that have not played yet that season show no OPR. The header counts teams and rookies and shows the top and average season OPR.
 
 <p align="center">
-  <img src="docs/assets/pre-event-preview.png" width="900" alt="Historical preview of the 2026 High Country – Flagstaff Qualifier listing 20 registered teams by highest prior-season OPR, led by team 18291 at 128.13 from 2024">
+  <img src="docs/assets/pre-event-preview.png" width="900" alt="Pre-event preview of the 2026 Wu League Tournament listing 32 registered teams by 2026 season OPR, led by team 21229 at 151.10, with 5 rookies and a 30.0 average">
 </p>
 
 ### Settings and in-app updates
@@ -224,13 +224,13 @@ OPR and OPRc are scouting estimates, not official FTC rankings. Their additive m
 ### Installation
 
 1. Use macOS 14 or later and make sure Python 3 is installed.
-2. Download the [latest release](https://github.com/Sakzyo/FTC_Event_Scout/releases/latest/download/FTC-Event-Scout-1.0.5.dmg).
+2. Download the [latest release](https://github.com/Sakzyo/FTC_Event_Scout/releases/latest/download/FTC-Event-Scout-1.0.6.dmg).
 3. Open the downloaded DMG and drag **FTC Event Scout** into **Applications**.
 4. Launch the app and enter your FIRST Events API username and token.
 
 Sparkle-enabled builds offer **FTC Event Scout → Check for Updates…** and **Settings → Updates**. Updates are signed ZIP archives installed inside the app, with an **Install and Relaunch** action. Automatic checks and installation on quit can be enabled in Settings. Version 1.0.5 is the first Sparkle-enabled release, so users of 1.0.4 or earlier need to install it manually once; later versions arrive through the in-app updater.
 
-Version 1.0.5 is ad-hoc signed and not notarized. If macOS blocks the first launch, open **System Settings → Privacy & Security** and choose **Open Anyway**.
+Version 1.0.6 is ad-hoc signed and not notarized. If macOS blocks the first launch, open **System Settings → Privacy & Security** and choose **Open Anyway**.
 
 ### Development
 
