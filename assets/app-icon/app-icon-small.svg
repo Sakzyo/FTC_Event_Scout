@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title">
+<title id="title">FTC Event Scout (small sizes)</title>
+<defs><clipPath id="tile"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath></defs>
+<rect x="100" y="100" width="824" height="824" rx="185" fill="#E6EAED"/>
+<g clip-path="url(#tile)">
+<g transform="translate(-61 0)">
+<polyline points="372,696.862 372,585" fill="none" stroke="#59B530" stroke-width="62" stroke-linejoin="miter" stroke-linecap="butt"/>
+<polyline points="403.82,508.18 539.998,372.002" fill="none" stroke="#59B530" stroke-width="62" stroke-linejoin="miter" stroke-linecap="butt"/>
+<polyline points="641.4,330 690,330" fill="none" stroke="#59B530" stroke-width="62" stroke-linejoin="miter" stroke-linecap="butt"/>
+<polyline points="690,330 744,276 794,276" fill="none" stroke="#59B530" stroke-width="40" stroke-linejoin="miter" stroke-linecap="butt"/>
+<polyline points="690,330 744,384 794,384" fill="none" stroke="#59B530" stroke-width="40" stroke-linejoin="miter" stroke-linecap="butt"/>
+<mask id="gear-hole" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024"><rect width="1024" height="1024" fill="white"/><circle cx="372" cy="540" r="30.90" fill="black"/></mask><g mask="url(#gear-hole)"><g fill="#E4A408"><circle cx="372" cy="540" r="66.55"/><rect x="355.96" y="458.00" width="32.09" height="27.33" rx="3.57" transform="rotate(0 372 540)"/><rect x="355.96" y="458.00" width="32.09" height="27.33" rx="3.57" transform="rotate(45 372 540)"/><rect x="355.96" y="458.00" width="32.09" height="27.33" rx="3.57" transform="rotate(90 372 540)"/><rect x="355.96" y="458.00" width="32.09" height="27.33" rx="3.57" transform="rotate(135 372 540)"/><rect x="355.96" y="458.00" width="32.09" height="27.33" rx="3.57" transform="rotate(180 372 540)"/><rect x="355.96" y="458.00" width="32.09" height="27.33" rx="3.57" transform="rotate(225 372 540)"/><rect x="355.96" y="458.00" width="32.09" height="27.33" rx="3.57" transform="rotate(270 372 540)"/><rect x="355.96" y="458.00" width="32.09" height="27.33" rx="3.57" transform="rotate(315 372 540)"/></g><circle cx="372" cy="540" r="30.90" fill="none"/></g><circle cx="582" cy="330" r="56.21" fill="none" stroke="#E4A408" stroke-width="19.59"/><circle cx="582" cy="330" r="20.44" fill="none" stroke="#E4A408" stroke-width="17.03"/><circle cx="826" cy="276" r="32" fill="none" stroke="#59B530" stroke-width="24"/><circle cx="826" cy="384" r="32" fill="none" stroke="#59B530" stroke-width="24"/>
+<path fill-rule="evenodd" fill="#E4A408" d="M468,760 L420,843.138 L324,843.138 L276,760 L324,676.862 L420,676.862 Z M325.92,760 a46.08,46.08 0 1,0 92.16,0 a46.08,46.08 0 1,0 -92.16,0 Z"/>
+</g>
+</g>
+</svg>

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/app-icon.svg" width="112" alt="FTC Event Scout application icon">
+  <img src="assets/app-icon/app-icon.svg" width="112" alt="FTC Event Scout application icon">
 </p>
 
 <h1 align="center">FTC Event Scout</h1>
@@ -251,6 +251,8 @@ For build-only workflows:
 ./script/package_app.sh release
 ```
 
+The app icon's artwork lives in `assets/app-icon`. Packaging compiles `AppIcon.icon` with Xcode's `actool`, which gives macOS 26 light and dark versions of the icon; macOS 14 and 15 show the light `AppIcon.icns`. After editing the icon SVGs, run `./script/render_app_icon.py` (it needs Google Chrome and Pillow) to regenerate the PNG sizes and the Icon Composer layer.
+
 To create the release app, compressed first-install DMG, and SHA-256 checksum:
 
 ```sh
@@ -291,7 +293,8 @@ FTC_Event_Scout/
 │   ├── Views/                       rankings, highlights, match history, manual entry, settings
 │   │   ├── ManualEntry/             manual event sidebar, match editor, CSV import and export
 │   │   └── Components/              reusable SwiftUI components
-│   └── Resources/                   localized strings
+│   └── Resources/                   localized strings and the Treeman logo
+├── assets/app-icon/                 app icon SVG sources, rendered PNG sizes, and the light/dark Icon Composer icon
 ├── script/                          ← build, package, DMG, update, launch, and icon tooling
 ├── config/sparkle-public-key.txt    Ed25519 public key for verifying updates
 ├── web_server.py                    loopback JSON service used by the app
@@ -308,5 +311,5 @@ FTC_Event_Scout/
 │   └── test_*.py                    Python score and packaging tests
 └── docs/
     ├── software-updates.md          release signing and Sparkle publishing guide
-    └── assets/                      README icon and current feature captures
+    └── assets/                      current feature captures
 ```
