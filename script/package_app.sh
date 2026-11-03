@@ -129,6 +129,7 @@ done
 cp -R "$ROOT_DIR/event_results" "$BACKEND_RESOURCES/event_results"
 cp -R "$ROOT_DIR/events_teams_opr" "$BACKEND_RESOURCES/events_teams_opr"
 cp -R "$ROOT_DIR/Sources/FTCEventScout/Resources/en.lproj" "$APP_RESOURCES/en.lproj"
+cp "$ROOT_DIR/Sources/FTCEventScout/Resources/TreemanLogo.png" "$APP_RESOURCES/TreemanLogo.png"
 
 while IFS= read -r resource_bundle; do
   cp -R "$resource_bundle" "$APP_RESOURCES/"
