@@ -31,3 +31,6 @@ Thumbs.db
 *.tmp
 *.swp
 *~
+
+# Local trailer project files
+trailer/
