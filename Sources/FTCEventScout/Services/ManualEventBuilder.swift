@@ -115,8 +115,10 @@ enum ManualEventBuilder {
     }
 
     private static func biobuzzBreakdowns(for match: ManualMatch) -> (red: ScoreBreakdown, blue: ScoreBreakdown) {
-        let red = BiobuzzScoring.score(match.red.biobuzz, alliance: .red, flowers: match.flowers)
-        let blue = BiobuzzScoring.score(match.blue.biobuzz, alliance: .blue, flowers: match.flowers)
+        let redInput = match.biobuzzInput(for: .red)
+        let blueInput = match.biobuzzInput(for: .blue)
+        let red = BiobuzzScoring.score(redInput, alliance: .red, flowers: match.flowers)
+        let blue = BiobuzzScoring.score(blueInput, alliance: .blue, flowers: match.flowers)
 
         func breakdown(
             input: BiobuzzAllianceInput,
@@ -137,6 +139,7 @@ enum ManualEventBuilder {
                 finalScore: Double(final),
                 details: BiobuzzScoring.breakdownDetails(
                     input: input,
+                    recording: match.recording,
                     result: result,
                     opponentInput: opponentInput,
                     flowers: match.flowers,
@@ -147,8 +150,8 @@ enum ManualEventBuilder {
         }
 
         return (
-            breakdown(input: match.red.biobuzz, result: red, opponentInput: match.blue.biobuzz, opponent: blue),
-            breakdown(input: match.blue.biobuzz, result: blue, opponentInput: match.red.biobuzz, opponent: red)
+            breakdown(input: redInput, result: red, opponentInput: blueInput, opponent: blue),
+            breakdown(input: blueInput, result: blue, opponentInput: redInput, opponent: red)
         )
     }
 

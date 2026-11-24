@@ -9,6 +9,8 @@ enum BiobuzzScoring {
     static let autoParkPoints = 5
     static let teleopParkPoints = 5
     static let hiveTipPoints = 20
+    /// Per-team entry: hive cycles an alliance completes for each hive tip.
+    static let cyclesPerHiveTip = 2
     static let hivePollenNectarPoints = 2
     static let gardenPollenNectarPoints = 1
     static let ownedFlowerElementPoints = 2
@@ -130,9 +132,11 @@ enum BiobuzzScoring {
     }
 
     /// Display rows in the same order, ids, and labels as `score_breakdown.py`,
-    /// so manual matches render exactly like FIRST Events matches.
+    /// so manual matches render exactly like FIRST Events matches. Per-team matches add each
+    /// team's hive cycles.
     static func breakdownDetails(
         input: BiobuzzAllianceInput,
+        recording: BiobuzzRecordingMode = .alliance,
         result: AllianceResult,
         opponentInput: BiobuzzAllianceInput,
         flowers: BiobuzzFlowers,
@@ -149,8 +153,14 @@ enum BiobuzzScoring {
             elements.isEmpty ? "Empty" : elements.map(\.title).joined(separator: " / ")
         }
 
+        let perTeam = recording == .perTeam
+        func cycles(_ first: Int, _ second: Int) -> String {
+            "\(first) · \(second)"
+        }
+
         return [
             row("auto", "Auto", String(result.autoPoints), indent: 0, emphasized: true),
+            perTeam ? row("auto-hive-cycles", "Hive Cycles (Robot 1 / 2)", cycles(input.robot1.autoHiveCycles, input.robot2.autoHiveCycles)) : nil,
             row("auto-hive-tips", "Hive Tips", String(input.autoHiveTips)),
             row("auto-leave", "Leave (Robot 1 / 2)", pair(input.autoRobot1Leave, input.autoRobot2Leave)),
             row("auto-park", "Park (Robot 1 / 2)", pair(input.autoRobot1Park, input.autoRobot2Park)),
@@ -158,6 +168,7 @@ enum BiobuzzScoring {
             row("auto-park-points", "Park Points", String(result.autoParkPoints)),
             row("auto-hive-points", "Hive Points", String(result.autoHivePoints)),
             row("teleop", "Teleop", String(result.teleopPoints), indent: 0, emphasized: true),
+            perTeam ? row("teleop-hive-cycles", "Hive Cycles (Robot 1 / 2)", cycles(input.robot1.teleopHiveCycles, input.robot2.teleopHiveCycles)) : nil,
             row("teleop-hive-tips", "Hive Tips", String(input.teleopHiveTips)),
             row("teleop-hive-pollen-nectar", "Hive Pollen / Nectar Remaining", String(input.teleopHivePollenNectar)),
             row("teleop-flower-red", "Red Alliance Flower", flower(flowers.redAlliance)),
@@ -177,7 +188,7 @@ enum BiobuzzScoring {
             row("rp-swarm", "Swarm RP", yesNo(result.swarmRP), indent: 0),
             row("rp-pollinator-1", "Pollinator 1 RP", yesNo(result.pollinator1RP), indent: 0),
             row("rp-pollinator-2", "Pollinator 2 RP", yesNo(result.pollinator2RP), indent: 0),
-        ]
+        ].compactMap { $0 }
     }
 
     private static func yesNo(_ value: Bool) -> String {
