@@ -20,7 +20,7 @@
   <sub>Live rankings, scouting tags, and color-coded OPR comparisons for every team at an event.</sub>
 </p>
 
-**FTC Event Scout** is a native **macOS scouting app** for exploring FIRST Tech Challenge events. It combines live rankings, comparative OPR charts, score highlights, team match history, detailed score breakdowns, and locally stored scouting tags in a SwiftUI interface.
+**FTC Event Scout** is a native **macOS scouting app** developed by Dylan Xu from FTC team **19600 Treeman** for exploring FIRST Tech Challenge events. It combines live rankings, comparative OPR charts, score highlights, team match history, detailed score breakdowns, and locally stored scouting tags in a SwiftUI interface.
 
 
 ## Features
