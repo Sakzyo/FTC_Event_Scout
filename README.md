@@ -20,7 +20,7 @@
   <sub>Live rankings, scouting tags, and color-coded OPR comparisons for every team at an event.</sub>
 </p>
 
-**FTC Event Scout** is a native **macOS scouting app** for exploring FIRST Tech Challenge events. It combines live rankings, comparative OPR charts, score highlights, team match history, detailed score breakdowns, and locally stored scouting tags in a SwiftUI interface.
+**FTC Event Scout** is a native **macOS scouting app** developed by Dylan Xu from FTC team **19600 Treeman** for exploring FIRST Tech Challenge events. It combines live rankings, comparative OPR charts, score highlights, team match history, detailed score breakdowns, and locally stored scouting tags in a SwiftUI interface.
 
 
 ## Features
@@ -160,12 +160,12 @@ The **Match Data** page lists every match beside an editor for the selected one.
   <sub>BIOBUZZ matches are entered as field events; every subtotal and the final score are calculated for you.</sub>
 </p>
 
-- **BIOBUZZ** matches record what happened: hive tips, robot leave and park, pollen and nectar left in the hive and garden, each flower's contents from bottom to top, and minor and major fouls. The app calculates every subtotal, the final score, and the Swarm and Pollinator ranking points from the Competition Manual's point values. Any calculated subtotal can be overridden with the pencil button. Choose **Totals Only** for a match when you only know period scores.
+- **BIOBUZZ** matches record what happened: hive tips, robot leave and park, pollen and nectar left in the hive and garden, each flower's contents from bottom to top, and minor and major fouls. The app calculates every subtotal, the final score, and the Swarm and Pollinator ranking points from the Competition Manual's point values. Any calculated subtotal can be overridden with the pencil button. Choose **Totals Only** for a match when you only know period scores. The **Alliance / Per Team** switch chooses how the detailed form is recorded: **Alliance** takes hive tips and hive and garden counts for each alliance, while **Per Team** takes each team's hive cycles instead, and every two cycles an alliance completes tip the hive once. Pollen and nectar left in the hive and garden, flowers, leave and park, and fouls are entered the same way in both.
 - **Other seasons** record Auto, Driver-Controlled (without endgame), Endgame, and penalty points received; the final score is their sum unless you override it.
 
 Rankings use the same least-squares OPR as FIRST Events data, calculated in Swift: total from final scores, npOPR without penalty points received, Auto, Teleop without endgame, and Endgame.
 
-**CSV import and export.** The **CSV** menu imports matches (added to the event, or replacing every match after a confirmation), exports the event, and exports an empty template with the right columns for its season. Columns are `Level` (`Q` or `P`), `Match`, `Game`, `Red1`, `Red2`, `Blue1`, `Blue2`, `Scored` (`Y`/`N`), then per-alliance score columns such as `Red Auto Hive Tips` or `Blue Penalty Received`. BIOBUZZ flower columns list elements bottom to top, separated by `|`, for example `POLLEN|POLLEN|RED_NECTAR`. Rows that can't be imported are skipped and listed with their line numbers. The `Match Details.csv` files the app generates from FIRST Events also import, as Totals Only matches.
+**CSV import and export.** The **CSV** menu imports matches (added to the event, or replacing every match after a confirmation), exports the event, and exports an empty template with the right columns for its season. Columns are `Level` (`Q` or `P`), `Match`, `Game`, `Red1`, `Red2`, `Blue1`, `Blue2`, `Scored` (`Y`/`N`), then per-alliance score columns such as `Red Auto Hive Tips` or `Blue Penalty Received`. BIOBUZZ files add `Recording` (`Alliance` or `Per Team`) and per-team columns such as `Red Robot1 Teleop Hive Cycles`. BIOBUZZ flower columns list elements bottom to top, separated by `|`, for example `POLLEN|POLLEN|RED_NECTAR`. Rows that can't be imported are skipped and listed with their line numbers. The `Match Details.csv` files the app generates from FIRST Events also import, as Totals Only matches.
 
 Right-click a manual event in the sidebar to rename, export, or delete it. Select **FIRST Events** in the sidebar, or load an event code, to return to online data.
 

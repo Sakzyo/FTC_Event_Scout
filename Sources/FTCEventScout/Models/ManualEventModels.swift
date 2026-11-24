@@ -49,7 +49,8 @@ struct ManualEvent: Codable, Identifiable, Equatable {
             level: level,
             number: number,
             isScored: true,
-            entryStyle: supportsDetailedEntry ? .detailed : .totals
+            entryStyle: supportsDetailedEntry ? .detailed : .totals,
+            recording: match?.recording ?? .alliance
         )
     }
 }
@@ -91,6 +92,24 @@ enum ManualEntryStyle: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+/// Whether a detailed BIOBUZZ match records alliance-wide counts or each team's own work.
+enum BiobuzzRecordingMode: String, Codable, CaseIterable, Identifiable {
+    /// Hive tips, hive and garden counts entered for the alliance as a whole.
+    case alliance
+    /// Hive cycles entered for each team; every two cycles the alliance
+    /// completes tip the hive once.
+    case perTeam
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .alliance: "Alliance"
+        case .perTeam: "Per Team"
+        }
+    }
+}
+
 struct ManualMatch: Codable, Identifiable, Equatable {
     var id: UUID
     var level: ManualMatchLevel
@@ -105,6 +124,8 @@ struct ManualMatch: Codable, Identifiable, Equatable {
     /// Unscored matches are the schedule: they feed OPRc predictions instead of OPR.
     var isScored: Bool
     var entryStyle: ManualEntryStyle
+    /// How the detailed BIOBUZZ form is recorded. Both forms are kept, like `entryStyle`.
+    var recording: BiobuzzRecordingMode
     var red: ManualAllianceEntry
     var blue: ManualAllianceEntry
     /// BIOBUZZ flowers are shared field state, so they are entered once per match.
@@ -121,6 +142,7 @@ struct ManualMatch: Codable, Identifiable, Equatable {
         blue2: Int? = nil,
         isScored: Bool = false,
         entryStyle: ManualEntryStyle = .totals,
+        recording: BiobuzzRecordingMode = .alliance,
         red: ManualAllianceEntry = ManualAllianceEntry(),
         blue: ManualAllianceEntry = ManualAllianceEntry(),
         flowers: BiobuzzFlowers = BiobuzzFlowers()
@@ -135,6 +157,7 @@ struct ManualMatch: Codable, Identifiable, Equatable {
         self.blue2 = blue2
         self.isScored = isScored
         self.entryStyle = entryStyle
+        self.recording = recording
         self.red = red
         self.blue = blue
         self.flowers = flowers
@@ -165,6 +188,11 @@ struct ManualMatch: Codable, Identifiable, Equatable {
         alliance == .red ? red : blue
     }
 
+    /// The alliance-wide BIOBUZZ counts scoring uses, derived from per-team entry when needed.
+    func biobuzzInput(for alliance: AllianceColor) -> BiobuzzAllianceInput {
+        input(for: alliance).biobuzz.scored(as: recording)
+    }
+
     /// Problems that keep this match out of OPR, predictions, and import.
     func validationIssues(in event: ManualEvent) -> [String] {
         var issues: [String] = []
@@ -186,6 +214,27 @@ struct ManualMatch: Codable, Identifiable, Equatable {
             issues.append("\(title) already exists.")
         }
         return issues
+    }
+}
+
+extension ManualMatch {
+    /// Events saved before per-team recording have no `recording` key.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        level = try container.decode(ManualMatchLevel.self, forKey: .level)
+        number = try container.decode(Int.self, forKey: .number)
+        game = try container.decode(Int.self, forKey: .game)
+        red1 = try container.decodeIfPresent(Int.self, forKey: .red1)
+        red2 = try container.decodeIfPresent(Int.self, forKey: .red2)
+        blue1 = try container.decodeIfPresent(Int.self, forKey: .blue1)
+        blue2 = try container.decodeIfPresent(Int.self, forKey: .blue2)
+        isScored = try container.decode(Bool.self, forKey: .isScored)
+        entryStyle = try container.decode(ManualEntryStyle.self, forKey: .entryStyle)
+        recording = try container.decodeIfPresent(BiobuzzRecordingMode.self, forKey: .recording) ?? .alliance
+        red = try container.decode(ManualAllianceEntry.self, forKey: .red)
+        blue = try container.decode(ManualAllianceEntry.self, forKey: .blue)
+        flowers = try container.decode(BiobuzzFlowers.self, forKey: .flowers)
     }
 }
 
@@ -250,6 +299,12 @@ struct BiobuzzAllianceInput: Codable, Equatable {
     var majorFouls = 0
     /// Hand-corrected point subtotals keyed by `BiobuzzPointField.rawValue`.
     var overrides: [String: Int] = [:]
+    /// Per-team entry for the alliance's first and second team.
+    var robot1 = BiobuzzTeamInput()
+    var robot2 = BiobuzzTeamInput()
+
+    var autoHiveCycles: Int { robot1.autoHiveCycles + robot2.autoHiveCycles }
+    var totalHiveCycles: Int { autoHiveCycles + robot1.teleopHiveCycles + robot2.teleopHiveCycles }
 
     func override(for field: BiobuzzPointField) -> Int? {
         overrides[field.rawValue]
@@ -258,6 +313,52 @@ struct BiobuzzAllianceInput: Codable, Equatable {
     mutating func setOverride(_ value: Int?, for field: BiobuzzPointField) {
         overrides[field.rawValue] = value
     }
+
+    /// The alliance-wide counts for `mode`. Per-team entry has no hive tips of its own: every
+    /// two cycles the alliance completes tip the hive once. Cycles carry over from auto into
+    /// teleop, so an odd auto cycle pairs with the first teleop cycle for a teleop tip.
+    /// Pollen and nectar left in the hive and garden, leave, park, fouls, and overrides are
+    /// entered for the alliance as before.
+    func scored(as mode: BiobuzzRecordingMode) -> BiobuzzAllianceInput {
+        guard mode == .perTeam else { return self }
+        var input = self
+        let autoTips = autoHiveCycles / BiobuzzScoring.cyclesPerHiveTip
+        input.autoHiveTips = autoTips
+        input.teleopHiveTips = totalHiveCycles / BiobuzzScoring.cyclesPerHiveTip - autoTips
+        return input
+    }
+}
+
+extension BiobuzzAllianceInput {
+    /// Events saved before per-team recording have no `robot1` / `robot2` keys.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        func value<T: Decodable>(_ key: CodingKeys, _ fallback: T) throws -> T {
+            try container.decodeIfPresent(T.self, forKey: key) ?? fallback
+        }
+        self.init()
+        autoHiveTips = try value(.autoHiveTips, 0)
+        autoRobot1Leave = try value(.autoRobot1Leave, false)
+        autoRobot2Leave = try value(.autoRobot2Leave, false)
+        autoRobot1Park = try value(.autoRobot1Park, false)
+        autoRobot2Park = try value(.autoRobot2Park, false)
+        teleopHiveTips = try value(.teleopHiveTips, 0)
+        teleopHivePollenNectar = try value(.teleopHivePollenNectar, 0)
+        teleopGardenPollenNectar = try value(.teleopGardenPollenNectar, 0)
+        teleopRobot1Park = try value(.teleopRobot1Park, false)
+        teleopRobot2Park = try value(.teleopRobot2Park, false)
+        minorFouls = try value(.minorFouls, 0)
+        majorFouls = try value(.majorFouls, 0)
+        overrides = try value(.overrides, [:])
+        robot1 = try value(.robot1, BiobuzzTeamInput())
+        robot2 = try value(.robot2, BiobuzzTeamInput())
+    }
+}
+
+/// One team's share of an alliance's BIOBUZZ scoring in per-team entry.
+struct BiobuzzTeamInput: Codable, Equatable {
+    var autoHiveCycles = 0
+    var teleopHiveCycles = 0
 }
 
 /// Calculated BIOBUZZ subtotals a scout may override.

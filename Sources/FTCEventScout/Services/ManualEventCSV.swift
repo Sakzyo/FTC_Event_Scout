@@ -34,7 +34,7 @@ enum ManualEventCSV {
         var headers = ["Level", "Match", "Game", "Red1", "Red2", "Blue1", "Blue2", "Scored"]
         let detailed = season == BiobuzzScoring.season
         if detailed {
-            headers.append("Entry")
+            headers += ["Entry", "Recording"]
         }
         for prefix in ["Red", "Blue"] {
             if detailed {
@@ -116,6 +116,10 @@ enum ManualEventCSV {
         case teleopRobot2Park
         case minorFouls
         case majorFouls
+        case robot1AutoHiveCycles
+        case robot2AutoHiveCycles
+        case robot1TeleopHiveCycles
+        case robot2TeleopHiveCycles
 
         var title: String {
             switch self {
@@ -131,6 +135,10 @@ enum ManualEventCSV {
             case .teleopRobot2Park: "Teleop Robot2 Park"
             case .minorFouls: "Minor Fouls"
             case .majorFouls: "Major Fouls"
+            case .robot1AutoHiveCycles: "Robot1 Auto Hive Cycles"
+            case .robot2AutoHiveCycles: "Robot2 Auto Hive Cycles"
+            case .robot1TeleopHiveCycles: "Robot1 Teleop Hive Cycles"
+            case .robot2TeleopHiveCycles: "Robot2 Teleop Hive Cycles"
             }
         }
 
@@ -142,6 +150,10 @@ enum ManualEventCSV {
             case .gardenPollenNectar: \.teleopGardenPollenNectar
             case .minorFouls: \.minorFouls
             case .majorFouls: \.majorFouls
+            case .robot1AutoHiveCycles: \.robot1.autoHiveCycles
+            case .robot2AutoHiveCycles: \.robot2.autoHiveCycles
+            case .robot1TeleopHiveCycles: \.robot1.teleopHiveCycles
+            case .robot2TeleopHiveCycles: \.robot2.teleopHiveCycles
             default: nil
             }
         }
@@ -198,6 +210,7 @@ enum ManualEventCSV {
         case "Blue2": return match.blue2.map(String.init) ?? ""
         case "Scored": return match.isScored ? "Y" : "N"
         case "Entry": return match.entryStyle == .detailed ? "Detailed" : "Totals"
+        case "Recording": return match.recording == .perTeam ? "Per Team" : "Alliance"
         default: break
         }
         if let flower = BiobuzzFlower.allCases.first(where: { $0.title == header }) {
@@ -268,6 +281,11 @@ enum ManualEventCSV {
         case "detailed", "detail", "d": match.entryStyle = detailed ? .detailed : .totals
         case "totals", "total", "t", "totals only": match.entryStyle = .totals
         default: throw RowError("Entry must be Detailed or Totals.")
+        }
+        switch text("Recording").lowercased() {
+        case "", "alliance", "a": match.recording = .alliance
+        case "per team", "perteam", "team", "teams", "t": match.recording = .perTeam
+        default: throw RowError("Recording must be Alliance or Per Team.")
         }
 
         var hasScoreValues = false

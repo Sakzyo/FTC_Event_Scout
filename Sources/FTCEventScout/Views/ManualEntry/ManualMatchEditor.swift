@@ -32,8 +32,10 @@ struct ManualMatchEditor: View {
                                 BiobuzzAllianceForm(
                                     alliance: alliance,
                                     input: alliance == .red ? $match.red.biobuzz : $match.blue.biobuzz,
-                                    opponentInput: alliance == .red ? match.blue.biobuzz : match.red.biobuzz,
-                                    flowers: match.flowers
+                                    opponentInput: match.biobuzzInput(for: alliance == .red ? .blue : .red),
+                                    flowers: match.flowers,
+                                    recording: match.recording,
+                                    teams: alliance == .red ? [match.red1, match.red2] : [match.blue1, match.blue2]
                                 )
                             }
                         }
@@ -123,6 +125,18 @@ struct ManualMatchEditor: View {
                 .labelsHidden()
                 .fixedSize()
                 .help("Totals Only skips the detailed form when you only know period scores")
+            }
+
+            if usesDetailedForm && match.isScored {
+                Picker("Record", selection: $match.recording) {
+                    ForEach(BiobuzzRecordingMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+                .help("Alliance records hive tips for each alliance. Per Team records each team's hive cycles; every two cycles an alliance completes tip the hive once.")
             }
         }
         .textFieldStyle(.roundedBorder)
@@ -245,12 +259,16 @@ private extension View {
 private struct BiobuzzAllianceForm: View {
     let alliance: AllianceColor
     @Binding var input: BiobuzzAllianceInput
+    /// Already resolved for `recording`.
     let opponentInput: BiobuzzAllianceInput
     let flowers: BiobuzzFlowers
+    let recording: BiobuzzRecordingMode
+    let teams: [Int?]
 
     var body: some View {
-        let calculated = BiobuzzScoring.calculatedScore(input, alliance: alliance, flowers: flowers)
-        let result = BiobuzzScoring.score(input, alliance: alliance, flowers: flowers)
+        let scored = input.scored(as: recording)
+        let calculated = BiobuzzScoring.calculatedScore(scored, alliance: alliance, flowers: flowers)
+        let result = BiobuzzScoring.score(scored, alliance: alliance, flowers: flowers)
         let opponent = BiobuzzScoring.score(opponentInput, alliance: alliance == .red ? .blue : .red, flowers: flowers)
 
         VStack(alignment: .leading, spacing: 12) {
@@ -259,15 +277,35 @@ private struct BiobuzzAllianceForm: View {
                 .foregroundStyle(alliance.displayColor)
 
             FormGroup("Autonomous") {
-                CountRow(title: "Hive tips", value: $input.autoHiveTips)
+                if recording == .perTeam {
+                    TeamCountGrid(teams: teamLabels) {
+                        teamCountRow("Hive cycles", $input.robot1.autoHiveCycles, $input.robot2.autoHiveCycles)
+                    }
+                    DerivedTipsRow(tips: scored.autoHiveTips, cycles: input.autoHiveCycles)
+                } else {
+                    CountRow(title: "Hive tips", value: $input.autoHiveTips)
+                }
                 RobotRow(title: "Leave", first: $input.autoRobot1Leave, second: $input.autoRobot2Leave)
                 RobotRow(title: "Park", first: $input.autoRobot1Park, second: $input.autoRobot2Park)
             }
 
             FormGroup("Teleop") {
-                CountRow(title: "Hive tips", value: $input.teleopHiveTips)
-                CountRow(title: "Pollen / nectar left in hive", value: $input.teleopHivePollenNectar)
-                CountRow(title: "Pollen / nectar in garden", value: $input.teleopGardenPollenNectar)
+                if recording == .perTeam {
+                    TeamCountGrid(teams: teamLabels) {
+                        teamCountRow("Hive cycles", $input.robot1.teleopHiveCycles, $input.robot2.teleopHiveCycles)
+                    }
+                    DerivedTipsRow(
+                        tips: scored.teleopHiveTips,
+                        cycles: input.totalHiveCycles - input.autoHiveCycles,
+                        carriedCycle: input.autoHiveCycles % BiobuzzScoring.cyclesPerHiveTip != 0
+                    )
+                    CountRow(title: "Pollen / nectar left in hive", value: $input.teleopHivePollenNectar)
+                    CountRow(title: "Pollen / nectar in garden", value: $input.teleopGardenPollenNectar)
+                } else {
+                    CountRow(title: "Hive tips", value: $input.teleopHiveTips)
+                    CountRow(title: "Pollen / nectar left in hive", value: $input.teleopHivePollenNectar)
+                    CountRow(title: "Pollen / nectar in garden", value: $input.teleopGardenPollenNectar)
+                }
                 RobotRow(title: "Park", first: $input.teleopRobot1Park, second: $input.teleopRobot2Park)
             }
 
@@ -303,6 +341,87 @@ private struct BiobuzzAllianceForm: View {
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .allianceSheet(alliance)
+    }
+
+    /// Column headings for per-team entry: the team number, or the robot slot until one is typed.
+    private var teamLabels: [String] {
+        teams.enumerated().map { index, team in
+            team.map(String.init) ?? "Robot \(index + 1)"
+        }
+    }
+
+    private func teamCountRow(_ title: String, _ first: Binding<Int>, _ second: Binding<Int>) -> some View {
+        GridRow {
+            Text(title)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            TeamCountField(title: "\(title), \(teamLabels[0])", value: first)
+            TeamCountField(title: "\(title), \(teamLabels[1])", value: second)
+        }
+    }
+}
+
+/// Per-team counts: one row per item, one column per team.
+private struct TeamCountGrid<Rows: View>: View {
+    let teams: [String]
+    @ViewBuilder let rows: Rows
+
+    var body: some View {
+        Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 6) {
+            GridRow {
+                Color.clear
+                    .gridCellUnsizedAxes([.horizontal, .vertical])
+                ForEach(teams, id: \.self) { team in
+                    Text(team)
+                        .font(.caption.weight(.semibold).monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            rows
+        }
+    }
+}
+
+private struct TeamCountField: View {
+    let title: String
+    @Binding var value: Int
+
+    var body: some View {
+        HStack(spacing: 2) {
+            TextField(title, value: $value, format: .number)
+                .labelsHidden()
+                .textFieldStyle(.roundedBorder)
+                .multilineTextAlignment(.trailing)
+                .frame(width: 40)
+            Stepper(title, value: $value, in: 0 ... 999)
+                .labelsHidden()
+        }
+    }
+}
+
+/// Hive tips worked out from the alliance's cycles in per-team entry.
+private struct DerivedTipsRow: View {
+    let tips: Int
+    let cycles: Int
+    var carriedCycle = false
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text("Hive tips")
+            Text(note)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 8)
+            Text(String(tips))
+                .font(.scoutNumeric(size: 13, weight: .medium))
+        }
+        .help("Every \(BiobuzzScoring.cyclesPerHiveTip) cycles the alliance completes tip the hive once.")
+        .accessibilityElement(children: .combine)
+    }
+
+    private var note: String {
+        let base = "from \(cycles) alliance \(cycles == 1 ? "cycle" : "cycles")"
+        return carriedCycle ? base + " + 1 from auto" : base
     }
 }
 

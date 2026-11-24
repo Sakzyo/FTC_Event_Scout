@@ -82,6 +82,66 @@ final class ManualEventTests: XCTestCase {
 
     // MARK: Event building
 
+    // MARK: Per-team recording
+
+    func testPerTeamCyclesTipTheHiveEveryTwoAllianceCycles() {
+        var input = BiobuzzAllianceInput()
+        input.autoHiveTips = 9 // Alliance entry, ignored per team.
+        input.teleopHivePollenNectar = 5 // Shared hive state, kept per alliance.
+        input.robot1.autoHiveCycles = 2
+        input.robot2.autoHiveCycles = 1
+        input.robot1.teleopHiveCycles = 2
+        input.robot2.teleopHiveCycles = 2
+        input.teleopGardenPollenNectar = 7 // Kept per alliance.
+
+        XCTAssertEqual(input.scored(as: .alliance), input)
+        let scored = input.scored(as: .perTeam)
+        // 3 auto cycles tip once; the odd one pairs with teleop: 7 cycles → 3 tips in all.
+        XCTAssertEqual(scored.autoHiveTips, 1)
+        XCTAssertEqual(scored.teleopHiveTips, 2)
+        XCTAssertEqual(scored.teleopHivePollenNectar, 5)
+        XCTAssertEqual(scored.teleopGardenPollenNectar, 7)
+
+        let result = BiobuzzScoring.score(scored, alliance: .red, flowers: BiobuzzFlowers())
+        XCTAssertEqual(result.autoHivePoints, 20)
+        XCTAssertEqual(result.teleopHivePoints, 40 + 5 * 2)
+        XCTAssertEqual(result.teleopGardenPoints, 7)
+        XCTAssertFalse(result.pollinator1RP)
+    }
+
+    func testPerTeamMatchScoresFromCyclesAndListsThemInBreakdown() throws {
+        var match = ManualMatch(number: 1, red1: 1, red2: 2, blue1: 3, blue2: 4, isScored: true, entryStyle: .detailed, recording: .perTeam)
+        match.red.biobuzz.robot1.teleopHiveCycles = 5
+        match.red.biobuzz.robot2.teleopHiveCycles = 3
+        match.red.biobuzz.teleopRobot1Park = true
+        match.red.biobuzz.teleopHivePollenNectar = 3
+        let event = ManualEvent(name: "Per Team", season: 2026, matches: [match])
+
+        let record = try XCTUnwrap(ManualEventBuilder.matchRecords(for: event).first)
+        XCTAssertEqual(record.redScore.finalScore, 4 * 20 + 3 * 2 + 5)
+        XCTAssertEqual(record.redScore.details.first { $0.id == "teleop-hive-cycles" }?.value, "5 · 3")
+        XCTAssertEqual(record.redScore.details.first { $0.id == "teleop-hive-tips" }?.value, "4")
+        XCTAssertEqual(record.redScore.details.first { $0.id == "teleop-hive-pollen-nectar" }?.value, "3")
+        XCTAssertEqual(event.nextMatch(after: match).recording, .perTeam)
+    }
+
+    func testEventsSavedBeforePerTeamRecordingStillDecode() throws {
+        let match = ManualMatch(number: 1, isScored: true, entryStyle: .detailed)
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(match)) as? [String: Any])
+        json["recording"] = nil
+        for key in ["red", "blue"] {
+            var entry = try XCTUnwrap(json[key] as? [String: Any])
+            var biobuzz = try XCTUnwrap(entry["biobuzz"] as? [String: Any])
+            biobuzz["robot1"] = nil
+            biobuzz["robot2"] = nil
+            entry["biobuzz"] = biobuzz
+            json[key] = entry
+        }
+        let decoded = try JSONDecoder().decode(ManualMatch.self, from: JSONSerialization.data(withJSONObject: json))
+        XCTAssertEqual(decoded, match)
+        XCTAssertEqual(decoded.recording, .alliance)
+    }
+
     func testStandingsMatchPythonOPRForSeedEvent() throws {
         let matchesURL = BiobuzzFixture.repository.appendingPathComponent("event_results/USIACMP Match Details.csv")
         let oprURL = BiobuzzFixture.repository.appendingPathComponent("events_teams_opr/USIACMP OPR.csv")
@@ -142,6 +202,10 @@ final class ManualEventTests: XCTestCase {
     func testCSVRoundTripKeepsEveryField() throws {
         var detailed = try FixtureMatch("biobuzz_qualification.json").match
         detailed.red.biobuzz.setOverride(9, for: .teleopGarden)
+        detailed.recording = .perTeam
+        detailed.red.biobuzz.robot1.autoHiveCycles = 3
+        detailed.red.biobuzz.robot2.teleopHiveCycles = 2
+        detailed.blue.biobuzz.robot2.autoHiveCycles = 4
         var totals = totalsMatch(2, red: (5, 6), blue: (7, 8), red: 70, blue: 60)
         totals.level = .playoff
         totals.game = 2
