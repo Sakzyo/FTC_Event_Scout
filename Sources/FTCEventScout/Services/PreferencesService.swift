@@ -10,6 +10,7 @@ struct PreferencesService {
         static let rememberLastEvent = "rememberLastEvent"
         static let oprChartLayout = "oprChartLayout"
         static let openManualEventID = "openManualEventID"
+        static let scoutName = "scoutName"
     }
 
     private let defaults: UserDefaults
@@ -70,6 +71,12 @@ struct PreferencesService {
             return OPRChartLayout(rawValue: rawValue) ?? .stacked
         }
         nonmutating set { defaults.set(newValue.rawValue, forKey: Key.oprChartLayout) }
+    }
+
+    /// Saved with each manual-match edit so merged scout files show who recorded what.
+    var scoutName: String {
+        get { defaults.string(forKey: Key.scoutName) ?? "" }
+        nonmutating set { defaults.set(newValue, forKey: Key.scoutName) }
     }
 
     /// The manual event open at quit, reopened on launch; nil when FIRST Events was showing.

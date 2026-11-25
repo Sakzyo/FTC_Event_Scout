@@ -59,6 +59,13 @@ final class AppModel {
         }
     }
 
+    /// The name stamped on this Mac's manual-match edits.
+    var scoutName: String {
+        didSet {
+            preferences.scoutName = scoutName
+        }
+    }
+
     private(set) var currentEvent: EventData?
     private(set) var rankedStandings: [RankedStanding] = []
     private(set) var storedTagGroups: [StoredTeamTags] = []
@@ -105,6 +112,7 @@ final class AppModel {
         sortDirection = preferences.sortDirection
         rememberLastEvent = preferences.rememberLastEvent
         oprChartLayout = preferences.oprChartLayout
+        scoutName = preferences.scoutName
 
         if preferredUsername.isEmpty && !initialUsername.isEmpty {
             preferences.firstAPIUsername = initialUsername
@@ -411,12 +419,24 @@ final class AppModel {
     }
 
     /// Saves an edited manual event right away and refreshes rankings shortly after,
-    /// so typing stays responsive while OPR is recalculated.
-    func updateManualEvent(_ event: ManualEvent) {
+    /// so typing stays responsive while OPR is recalculated. Typed changes stamp the
+    /// parts of each match they touch with the scout name; imports keep their own stamps.
+    func updateManualEvent(_ event: ManualEvent, recordingEdits: Bool = true) {
         guard let index = manualEvents.firstIndex(where: { $0.id == event.id }),
               manualEvents[index] != event else { return }
         var updated = event
-        updated.updatedAt = Date()
+        let now = Date()
+        if recordingEdits {
+            let previous = Dictionary(
+                manualEvents[index].matches.map { ($0.id, $0) },
+                uniquingKeysWith: { first, _ in first }
+            )
+            let name = scoutName.trimmingCharacters(in: .whitespacesAndNewlines)
+            updated.matches = event.matches.map {
+                $0.recordingEdits(since: previous[$0.id], by: name.isEmpty ? nil : name, at: now)
+            }
+        }
+        updated.updatedAt = now
         manualEvents[index] = updated
         do {
             try manualEventStore.save(updated)
@@ -458,27 +478,55 @@ final class AppModel {
         }
     }
 
-    /// Adds matches from a CSV to a manual event, or replaces its matches, and reports
-    /// which rows were skipped.
+    /// Merges matches from a CSV into a manual event, or replaces its matches, and reports
+    /// which rows were skipped and which entries the merge had to choose between.
     func importManualMatches(
         from url: URL,
         into id: UUID,
         replacing: Bool
-    ) throws -> ManualEventCSV.ImportResult {
+    ) throws -> ManualImportOutcome {
         guard var event = manualEvents.first(where: { $0.id == id }) else {
             throw CocoaError(.fileNoSuchFile)
         }
+        let data = try readImportedFile(at: url)
+        let result = try ManualEventCSV.importMatches(from: data, season: event.season)
+        let merge = ManualEventMerge.merge(existing: replacing ? [] : event.matches, incoming: result.matches)
+        event.matches = merge.matches
+        updateManualEvent(event, recordingEdits: false)
+        return ManualImportOutcome(
+            issues: result.issues,
+            usedMatchDetailsFormat: result.usedMatchDetailsFormat,
+            merge: merge
+        )
+    }
+
+    /// Merges another scout's exported event into a manual event of the same season.
+    func mergeScoutFile(from url: URL, into id: UUID) throws -> ManualImportOutcome {
+        guard var event = manualEvents.first(where: { $0.id == id }) else {
+            throw CocoaError(.fileNoSuchFile)
+        }
+        let incoming: ManualEvent
+        do {
+            incoming = try ManualEventStore.decoded(readImportedFile(at: url))
+        } catch is DecodingError {
+            throw ManualScoutFileError.unreadable
+        }
+        guard incoming.season == event.season else {
+            throw ManualScoutFileError.seasonMismatch(
+                file: FTCSeason.option(for: incoming.season).yearRange,
+                event: FTCSeason.option(for: event.season).yearRange
+            )
+        }
+        let merge = ManualEventMerge.merge(existing: event.matches, incoming: incoming.matches)
+        event.matches = merge.matches
+        updateManualEvent(event, recordingEdits: false)
+        return ManualImportOutcome(issues: [], usedMatchDetailsFormat: false, merge: merge)
+    }
+
+    private func readImportedFile(at url: URL) throws -> Data {
         let accessing = url.startAccessingSecurityScopedResource()
         defer { if accessing { url.stopAccessingSecurityScopedResource() } }
-        let data = try Data(contentsOf: url)
-        let result = try ManualEventCSV.importMatches(
-            from: data,
-            season: event.season,
-            existing: replacing ? [] : event.matches
-        )
-        event.matches = replacing ? result.matches : event.matches + result.matches
-        updateManualEvent(event)
-        return result
+        return try Data(contentsOf: url)
     }
 
     private func leaveManualEvent() {
