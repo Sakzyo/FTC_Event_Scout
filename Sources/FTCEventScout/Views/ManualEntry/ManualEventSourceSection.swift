@@ -221,3 +221,52 @@ extension View {
         }
     }
 }
+
+// MARK: - Scout files
+
+/// A manual event saved as JSON, with every edit time and scout name, for another Mac
+/// to merge. It is the same format the app saves events in.
+struct ScoutFile: FileDocument {
+    static var readableContentTypes: [UTType] { [.json] }
+
+    var data: Data
+
+    init(data: Data) {
+        self.data = data
+    }
+
+    init(configuration: ReadConfiguration) throws {
+        data = configuration.file.regularFileContents ?? Data()
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        FileWrapper(regularFileWithContents: data)
+    }
+}
+
+struct ScoutFileExport {
+    let file: ScoutFile
+    let filename: String
+
+    init(event: ManualEvent, scoutName: String) throws {
+        file = ScoutFile(data: try ManualEventStore.encoded(event))
+        let name = scoutName.trimmingCharacters(in: .whitespacesAndNewlines)
+        filename = name.isEmpty ? "\(event.name) Scout File" : "\(event.name) – \(name)"
+    }
+}
+
+extension View {
+    func scoutFileExporter(_ export: Binding<ScoutFileExport?>, onError: @escaping (String) -> Void) -> some View {
+        fileExporter(
+            isPresented: Binding(get: { export.wrappedValue != nil }, set: { if !$0 { export.wrappedValue = nil } }),
+            document: export.wrappedValue?.file,
+            contentType: .json,
+            defaultFilename: export.wrappedValue?.filename
+        ) { result in
+            if case .failure(let error) = result {
+                onError("The scout file could not be saved: \(error.localizedDescription)")
+            }
+            export.wrappedValue = nil
+        }
+    }
+}

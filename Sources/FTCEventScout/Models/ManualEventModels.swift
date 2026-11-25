@@ -130,6 +130,9 @@ struct ManualMatch: Codable, Identifiable, Equatable {
     var blue: ManualAllianceEntry
     /// BIOBUZZ flowers are shared field state, so they are entered once per match.
     var flowers: BiobuzzFlowers
+    /// Who last changed each part of the match and when, keyed by `ManualMatchPiece.key`.
+    /// Merging scouts' files uses it to keep the newest entry for each part.
+    var edits: [String: ManualEdit]
 
     init(
         id: UUID = UUID(),
@@ -145,7 +148,8 @@ struct ManualMatch: Codable, Identifiable, Equatable {
         recording: BiobuzzRecordingMode = .alliance,
         red: ManualAllianceEntry = ManualAllianceEntry(),
         blue: ManualAllianceEntry = ManualAllianceEntry(),
-        flowers: BiobuzzFlowers = BiobuzzFlowers()
+        flowers: BiobuzzFlowers = BiobuzzFlowers(),
+        edits: [String: ManualEdit] = [:]
     ) {
         self.id = id
         self.level = level
@@ -161,6 +165,7 @@ struct ManualMatch: Codable, Identifiable, Equatable {
         self.red = red
         self.blue = blue
         self.flowers = flowers
+        self.edits = edits
     }
 
     var redTeams: [Int] { [red1, red2].compactMap { $0 } }
@@ -218,7 +223,8 @@ struct ManualMatch: Codable, Identifiable, Equatable {
 }
 
 extension ManualMatch {
-    /// Events saved before per-team recording have no `recording` key.
+    /// Events saved before per-team recording have no `recording` key, and events saved
+    /// before merging have no `edits` key.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
@@ -235,7 +241,15 @@ extension ManualMatch {
         red = try container.decode(ManualAllianceEntry.self, forKey: .red)
         blue = try container.decode(ManualAllianceEntry.self, forKey: .blue)
         flowers = try container.decode(BiobuzzFlowers.self, forKey: .flowers)
+        edits = try container.decodeIfPresent([String: ManualEdit].self, forKey: .edits) ?? [:]
     }
+}
+
+/// One scout's latest change to part of a match.
+struct ManualEdit: Codable, Equatable {
+    var at: Date
+    /// The scout name set in Settings, or nil when none was set.
+    var by: String?
 }
 
 struct ManualMatchKey: Hashable, Comparable {

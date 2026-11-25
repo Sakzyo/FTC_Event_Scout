@@ -59,6 +59,14 @@ private struct GeneralSettingsPane: View {
             }
 
             Section {
+                TextField("Scout name", text: $model.scoutName, prompt: Text("Optional"))
+            } header: {
+                Text("Scouting")
+            } footer: {
+                Text("Saved with each manual match entry you make, so a head scout merging scout files can see who recorded what. It is stored on this Mac and in scout files you export.")
+            }
+
+            Section {
                 LabeledContent("Generated event data") {
                     Text("Caches")
                         .foregroundStyle(.secondary)

@@ -4,18 +4,24 @@ import Foundation
 /// the cache folder, so clearing cached event data never removes scouts' typed matches.
 struct ManualEventStore {
     private let directoryOverride: URL?
-    private let encoder: JSONEncoder
-    private let decoder: JSONDecoder
 
     init(directory: URL? = nil) {
         directoryOverride = directory
+    }
+
+    /// The JSON used for saved events and for scout files shared between Macs. Whole-second
+    /// ISO 8601 dates keep files readable by earlier versions of the app.
+    static func encoded(_ event: ManualEvent) throws -> Data {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
-        self.encoder = encoder
+        return try encoder.encode(event)
+    }
+
+    static func decoded(_ data: Data) throws -> ManualEvent {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        self.decoder = decoder
+        return try decoder.decode(ManualEvent.self, from: data)
     }
 
     /// Every readable event, most recently edited first. Unreadable files are skipped
@@ -31,7 +37,7 @@ struct ManualEventStore {
         var failures: [String] = []
         for file in files {
             do {
-                events.append(try decoder.decode(ManualEvent.self, from: Data(contentsOf: file)))
+                events.append(try Self.decoded(Data(contentsOf: file)))
             } catch {
                 failures.append(file.lastPathComponent)
             }
@@ -41,7 +47,7 @@ struct ManualEventStore {
     }
 
     func save(_ event: ManualEvent) throws {
-        let data = try encoder.encode(event)
+        let data = try Self.encoded(event)
         try data.write(to: fileURL(for: event.id), options: .atomic)
     }
 
