@@ -85,6 +85,8 @@ enum RankingSortField: String, CaseIterable, Identifiable {
     case rookieYear
     case record
     case played
+    /// Manual events with per-team BIOBUZZ entry only.
+    case averageCycles
 
     var id: String { rawValue }
 
@@ -92,6 +94,14 @@ enum RankingSortField: String, CaseIterable, Identifiable {
         .storedRank, .teamNumber, .record, .played, .totalOPR, .oprc,
         .nonPenaltyOPR, .autoOPR, .teleopOPR, .endgameOPR,
     ]
+
+    /// Live fields, with average cycles after matches played when the event records them.
+    static func liveFields(includingCycles: Bool) -> [RankingSortField] {
+        guard includingCycles, let played = liveFields.firstIndex(of: .played) else { return liveFields }
+        var fields = liveFields
+        fields.insert(.averageCycles, at: played + 1)
+        return fields
+    }
 
     static let previewFields: [RankingSortField] = [
         .storedRank, .teamNumber, .teamName, .seasonOPR, .rookieYear,
@@ -103,7 +113,7 @@ enum RankingSortField: String, CaseIterable, Identifiable {
         switch self {
         case .storedRank, .teamNumber, .teamName, .rookieYear: .ascending
         case .totalOPR, .oprc, .nonPenaltyOPR, .autoOPR, .teleopOPR, .endgameOPR,
-             .seasonOPR, .record, .played: .descending
+             .seasonOPR, .record, .played, .averageCycles: .descending
         }
     }
 
@@ -443,6 +453,9 @@ struct EventData: Equatable {
     let matchesByTeam: [Int: [MatchRecord]]
     /// Qualification records keyed by team number; teams without a scored match are absent.
     let teamRecords: [Int: TeamEventRecord]
+    /// Manual events only: each team's average hive cycles per scored per-team match.
+    /// Teams without such a match are absent, and it is empty for every other event.
+    let teamCycleAverages: [Int: Double]
     let highlights: [EventHighlight]
     let oprcAnalysis: OPRcAnalysis
     let statusMessage: String
@@ -454,9 +467,11 @@ struct EventData: Equatable {
         mode: EventMode,
         standings: [TeamStanding],
         matches: [MatchRecord],
+        teamCycleAverages: [Int: Double] = [:],
         statusMessage: String
     ) {
         self.eventCode = eventCode
+        self.teamCycleAverages = teamCycleAverages
         self.eventName = eventName
         self.season = season
         self.mode = mode

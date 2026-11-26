@@ -9,6 +9,8 @@ enum RankingColumn: Hashable, Identifiable {
     case tags
     case record
     case played
+    /// Manual events with per-team BIOBUZZ entry: average hive cycles per match.
+    case averageCycles
     case metric(RankingSortField)
     case rookieYear
 
@@ -18,10 +20,11 @@ enum RankingColumn: Hashable, Identifiable {
         .totalOPR, .oprc, .nonPenaltyOPR, .autoOPR, .teleopOPR, .endgameOPR,
     ]
 
-    static func live(sortField: RankingSortField) -> [RankingColumn] {
+    static func live(sortField: RankingSortField, showsCycles: Bool = false) -> [RankingColumn] {
         // When sorting by event rank the display position repeats it, so leave it out.
         let leading: [RankingColumn] = sortField == .storedRank ? [] : [.order]
-        return leading + [.eventRank, .team, .tags, .record, .played] + liveMetrics.map { .metric($0) }
+        let results: [RankingColumn] = showsCycles ? [.record, .played, .averageCycles] : [.record, .played]
+        return leading + [.eventRank, .team, .tags] + results + liveMetrics.map { .metric($0) }
     }
 
     static let preview: [RankingColumn] = [.order, .team, .tags, .metric(.seasonOPR), .rookieYear]
@@ -34,6 +37,7 @@ enum RankingColumn: Hashable, Identifiable {
         case .tags: "Tags"
         case .record: "Record"
         case .played: "Played"
+        case .averageCycles: "Avg Cycles"
         case .metric(let field): Self.metricTitle(field)
         case .rookieYear: "Rookie Year"
         }
@@ -45,6 +49,7 @@ enum RankingColumn: Hashable, Identifiable {
         case .eventRank: "Event rank"
         case .record: "Qualification record"
         case .played: "Matches played"
+        case .averageCycles: "Average hive cycles"
         case .metric(.oprc): "Calculated OPR"
         case .metric(.nonPenaltyOPR): "Non-penalty OPR"
         case .metric(.autoOPR): "Auto OPR"
@@ -57,7 +62,7 @@ enum RankingColumn: Hashable, Identifiable {
     var color: ScoutStatColor {
         switch self {
         case .order, .eventRank, .team, .tags: .white
-        case .record, .played, .rookieYear: .blue
+        case .record, .played, .averageCycles, .rookieYear: .blue
         case .metric: .red
         }
     }
@@ -70,6 +75,7 @@ enum RankingColumn: Hashable, Identifiable {
         case .team: .teamNumber
         case .record: .record
         case .played: .played
+        case .averageCycles: .averageCycles
         case .metric(let field): field
         case .rookieYear: .rookieYear
         }
@@ -80,6 +86,7 @@ enum RankingColumn: Hashable, Identifiable {
         case .eventRank: "Official event ranking"
         case .record: "Qualification wins-losses-ties"
         case .played: "Qualification matches played"
+        case .averageCycles: "Average hive cycles (auto plus teleop) per scored match recorded per team"
         case .metric(.totalOPR): "Offensive power rating"
         case .metric(.oprc): "Calculated OPR after one residual-IQR outlier filtering pass"
         case .metric(.nonPenaltyOPR): "OPR without points from opponent penalties"
@@ -97,6 +104,7 @@ enum RankingColumn: Hashable, Identifiable {
         case .tags: 116
         case .record: 84
         case .played: 72
+        case .averageCycles: 96
         case .metric(.seasonOPR): 108
         case .metric: 82
         case .rookieYear: 104
@@ -108,7 +116,7 @@ enum RankingColumn: Hashable, Identifiable {
     /// Magnitude columns draw a scale bar under each cell while they're the sort column.
     var showsScaleBar: Bool {
         switch self {
-        case .record, .played, .metric: true
+        case .record, .played, .averageCycles, .metric: true
         default: false
         }
     }
@@ -129,7 +137,8 @@ enum RankingColumn: Hashable, Identifiable {
     func value(
         for row: RankedStanding,
         records: [Int: TeamEventRecord],
-        metrics: [Int: TeamOPRcMetric]
+        metrics: [Int: TeamOPRcMetric],
+        cycleAverages: [Int: Double] = [:]
     ) -> RankingCellValue {
         let team = row.team
         switch self {
@@ -141,6 +150,7 @@ enum RankingColumn: Hashable, Identifiable {
             let record = records[team.teamNumber]
             return .record((record?.played ?? 0) > 0 ? record : nil)
         case .played: return .count(records[team.teamNumber]?.played ?? 0)
+        case .averageCycles: return .decimal(cycleAverages[team.teamNumber])
         case .metric(.oprc): return .decimal(metrics[team.teamNumber]?.oprc)
         case .metric(let field): return .decimal(Self.metricValue(field, for: team))
         case .rookieYear: return .year(team.rookieYear)
@@ -217,7 +227,8 @@ struct RankingColumnScale: Equatable {
         columns: [RankingColumn],
         rows: [RankedStanding],
         records: [Int: TeamEventRecord],
-        metrics: [Int: TeamOPRcMetric]
+        metrics: [Int: TeamOPRcMetric],
+        cycleAverages: [Int: Double] = [:]
     ) {
         guard let column = columns.first(where: { $0.sortField == sortField }),
               column.showsScaleBar else {
@@ -225,7 +236,9 @@ struct RankingColumnScale: Equatable {
         }
         self.column = column
         maximum = rows
-            .compactMap { column.value(for: $0, records: records, metrics: metrics).magnitude }
+            .compactMap {
+                column.value(for: $0, records: records, metrics: metrics, cycleAverages: cycleAverages).magnitude
+            }
             .filter(\.isFinite)
             .max() ?? 0
     }
@@ -276,7 +289,8 @@ struct RankingsStatTable: View {
 
     private var columns: [RankingColumn] {
         switch event.mode {
-        case .live, .manual: RankingColumn.live(sortField: model.sortField)
+        case .live, .manual:
+            RankingColumn.live(sortField: model.sortField, showsCycles: !event.teamCycleAverages.isEmpty)
         case .preview: RankingColumn.preview
         }
     }
@@ -296,7 +310,8 @@ struct RankingsStatTable: View {
             columns: columns,
             rows: rows,
             records: event.teamRecords,
-            metrics: event.oprcAnalysis.teamMetrics
+            metrics: event.oprcAnalysis.teamMetrics,
+            cycleAverages: event.teamCycleAverages
         )
 
         GeometryReader { proxy in
@@ -317,6 +332,7 @@ struct RankingsStatTable: View {
                                 rowHeight: rowHeight,
                                 records: event.teamRecords,
                                 metrics: event.oprcAnalysis.teamMetrics,
+                                cycleAverages: event.teamCycleAverages,
                                 sortField: model.sortField,
                                 scale: scale,
                                 tags: model.tags(eventCode: event.eventCode, teamNumber: row.team.teamNumber),
@@ -483,6 +499,7 @@ struct RankingStatRow: View {
     let rowHeight: CGFloat
     let records: [Int: TeamEventRecord]
     let metrics: [Int: TeamOPRcMetric]
+    let cycleAverages: [Int: Double]
     let sortField: RankingSortField
     let scale: RankingColumnScale?
     let tags: [TeamTag]
@@ -522,7 +539,7 @@ struct RankingStatRow: View {
     }
 
     private func cell(for column: RankingColumn) -> some View {
-        let value = column.value(for: row, records: records, metrics: metrics)
+        let value = column.value(for: row, records: records, metrics: metrics, cycleAverages: cycleAverages)
         let tint = column.color.cellTint
         return RankingCellView(
             value: value,
@@ -570,7 +587,7 @@ struct RankingStatRow: View {
 
     private var accessibilityValue: String {
         var parts = columns.compactMap { column -> String? in
-            column.value(for: row, records: records, metrics: metrics).accessibilityText
+            column.value(for: row, records: records, metrics: metrics, cycleAverages: cycleAverages).accessibilityText
                 .map { "\(column.accessibilityTitle) \($0)" }
         }
         if !tags.isEmpty {

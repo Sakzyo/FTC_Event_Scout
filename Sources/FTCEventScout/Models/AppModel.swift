@@ -167,9 +167,10 @@ final class AppModel {
     }
 
     var availableSortFields: [RankingSortField] {
-        currentEvent?.mode == .preview
-            ? RankingSortField.previewFields
-            : RankingSortField.liveFields
+        guard let currentEvent, currentEvent.mode != .preview else {
+            return currentEvent == nil ? RankingSortField.liveFields : RankingSortField.previewFields
+        }
+        return RankingSortField.liveFields(includingCycles: !currentEvent.teamCycleAverages.isEmpty)
     }
 
     /// Applies a column-header click: a new column sorts in its natural direction,
@@ -500,27 +501,45 @@ final class AppModel {
         )
     }
 
-    /// Merges another scout's exported event into a manual event of the same season.
-    func mergeScoutFile(from url: URL, into id: UUID) throws -> ManualImportOutcome {
+    /// Merges other scouts' exported events into a manual event of the same season, one
+    /// file after another in name order. Files that can't be read are skipped and reported.
+    func mergeScoutFiles(from urls: [URL], into id: UUID) throws -> ManualImportOutcome {
         guard var event = manualEvents.first(where: { $0.id == id }) else {
             throw CocoaError(.fileNoSuchFile)
         }
-        let incoming: ManualEvent
+        var sources: [(name: String, matches: [ManualMatch])] = []
+        var failures: [String] = []
+        let ordered = urls.sorted {
+            $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending
+        }
+        for url in ordered {
+            let name = url.lastPathComponent
+            do {
+                let incoming = try readScoutFile(at: url)
+                guard incoming.season == event.season else {
+                    throw ManualScoutFileError.seasonMismatch(
+                        file: FTCSeason.option(for: incoming.season).yearRange,
+                        event: FTCSeason.option(for: event.season).yearRange
+                    )
+                }
+                sources.append((name, incoming.matches))
+            } catch {
+                failures.append("\(name): \(error.localizedDescription)")
+            }
+        }
+        let merge = ManualEventMerge.merge(existing: event.matches, sources: sources)
+        event.matches = merge.matches
+        updateManualEvent(event, recordingEdits: false)
+        return ManualImportOutcome(issues: [], usedMatchDetailsFormat: false, merge: merge, failures: failures)
+    }
+
+    private func readScoutFile(at url: URL) throws -> ManualEvent {
+        let data = try readImportedFile(at: url)
         do {
-            incoming = try ManualEventStore.decoded(readImportedFile(at: url))
+            return try ManualEventStore.decoded(data)
         } catch is DecodingError {
             throw ManualScoutFileError.unreadable
         }
-        guard incoming.season == event.season else {
-            throw ManualScoutFileError.seasonMismatch(
-                file: FTCSeason.option(for: incoming.season).yearRange,
-                event: FTCSeason.option(for: event.season).yearRange
-            )
-        }
-        let merge = ManualEventMerge.merge(existing: event.matches, incoming: incoming.matches)
-        event.matches = merge.matches
-        updateManualEvent(event, recordingEdits: false)
-        return ManualImportOutcome(issues: [], usedMatchDetailsFormat: false, merge: merge)
     }
 
     private func readImportedFile(at url: URL) throws -> Data {
@@ -673,6 +692,11 @@ final class AppModel {
             result = compare(
                 currentEvent?.teamRecords[lhs.teamNumber]?.played ?? 0,
                 currentEvent?.teamRecords[rhs.teamNumber]?.played ?? 0
+            )
+        case .averageCycles:
+            result = compareOptional(
+                currentEvent?.teamCycleAverages[lhs.teamNumber],
+                currentEvent?.teamCycleAverages[rhs.teamNumber]
             )
         }
 

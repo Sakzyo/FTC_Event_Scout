@@ -8,7 +8,7 @@ final class RankingStatTableTests: XCTestCase {
         let ascending: [RankingSortField] = [.storedRank, .teamNumber, .teamName, .rookieYear]
         let descending: [RankingSortField] = [
             .totalOPR, .oprc, .nonPenaltyOPR, .autoOPR, .teleopOPR, .endgameOPR,
-            .seasonOPR, .record, .played,
+            .seasonOPR, .record, .played, .averageCycles,
         ]
 
         XCTAssertEqual(Set(ascending + descending), Set(RankingSortField.allCases))

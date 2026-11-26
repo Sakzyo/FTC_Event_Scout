@@ -119,6 +119,7 @@ extension RankingSortField {
         case .teamNumber: "Team number"
         case .record: "Record"
         case .played: "Matches played"
+        case .averageCycles: "Average cycles"
         case .totalOPR: "OPR"
         case .oprc: "OPRc"
         case .nonPenaltyOPR: "Non-penalty OPR"
