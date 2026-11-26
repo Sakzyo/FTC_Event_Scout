@@ -196,6 +196,40 @@ final class ManualEventMergeTests: XCTestCase {
         XCTAssertEqual(twice.notes, [])
     }
 
+    func testSeveralFilesMergeInOrderAndNameTheirNotes() {
+        let base = scheduled()
+        let ava = edited(base, by: "Ava", at: early) {
+            $0.red.biobuzz.robot1.teleopHiveCycles = 4
+            $0.blue.biobuzz.teleopHivePollenNectar = 2
+        }
+        let ben = edited(base, by: "Ben", at: late) {
+            $0.blue.biobuzz.robot2.teleopHiveCycles = 6
+            $0.blue.biobuzz.teleopHivePollenNectar = 3
+        }
+        let cara = scheduled(2)
+
+        let result = ManualEventMerge.merge(
+            existing: [base],
+            sources: [("Ava.json", [ava]), ("Ben.json", [ben, cara])]
+        )
+        let merged = result.matches[0]
+
+        XCTAssertEqual(result.updatedCount, 1)
+        XCTAssertEqual(result.addedCount, 1)
+        XCTAssertEqual(result.changedMatchIDs, result.matches.map(\.id))
+        XCTAssertEqual(merged.teamEntry(for: 101)?.teleopHiveCycles, 4)
+        XCTAssertEqual(merged.teamEntry(for: 202)?.teleopHiveCycles, 6)
+        XCTAssertEqual(merged.blue.biobuzz.teleopHivePollenNectar, 3)
+        XCTAssertEqual(result.notes.map(\.sourceName), ["Ben.json"])
+        XCTAssertEqual(result.notes.first?.kept, .incoming)
+    }
+
+    func testNoFilesChangesNothing() {
+        let result = ManualEventMerge.merge(existing: [scheduled()], sources: [])
+        XCTAssertEqual(result.addedCount + result.updatedCount, 0)
+        XCTAssertEqual(result.notes, [])
+    }
+
     // MARK: Files
 
     func testScoutFileRoundTripKeepsEdits() throws {

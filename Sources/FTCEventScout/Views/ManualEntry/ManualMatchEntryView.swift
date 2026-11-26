@@ -29,20 +29,24 @@ struct ManualMatchEntryView: View {
         }
         .fileImporter(
             isPresented: $isImporting,
-            allowedContentTypes: importKind.contentTypes
+            allowedContentTypes: importKind.contentTypes,
+            allowsMultipleSelection: importKind == .scoutFile
         ) { result in
             switch result {
-            case .success(let url):
+            case .success(let urls):
+                guard let url = urls.first else { return }
+                let names = urls.map(\.lastPathComponent)
                 do {
                     let outcome = switch importKind {
                     case .csvMerge: try model.importManualMatches(from: url, into: event.id, replacing: false)
                     case .csvReplace: try model.importManualMatches(from: url, into: event.id, replacing: true)
-                    case .scoutFile: try model.mergeScoutFile(from: url, into: event.id)
+                    case .scoutFile: try model.mergeScoutFiles(from: urls, into: event.id)
                     }
-                    importReport = ImportReport(filename: url.lastPathComponent, kind: importKind, outcome: outcome)
+                    importReport = ImportReport(filenames: names, kind: importKind, outcome: outcome)
                     if let first = outcome.merge.changedMatchIDs.first { selection = first }
                 } catch {
-                    model.manualEventError = "\(url.lastPathComponent) could not be imported: \(error.localizedDescription)"
+                    let subject = names.count == 1 ? names[0] : "\(names.count) files"
+                    model.manualEventError = "\(subject) could not be imported: \(error.localizedDescription)"
                 }
             case .failure(let error):
                 model.manualEventError = "The file could not be opened: \(error.localizedDescription)"
@@ -98,7 +102,7 @@ struct ManualMatchEntryView: View {
                 Spacer()
 
                 Menu {
-                    Button("Merge Scout File…") { beginImport(.scoutFile) }
+                    Button("Merge Scout Files…") { beginImport(.scoutFile) }
                     Button("Export Scout File…", action: exportScoutFile)
                     Divider()
                     Button("Import CSV (Add and Merge Matches)…") { beginImport(.csvMerge) }
@@ -138,7 +142,7 @@ struct ManualMatchEntryView: View {
                     Button("Add Match", action: addMatch)
                         .buttonStyle(.borderedProminent)
                     Button("Import CSV…") { beginImport(.csvMerge) }
-                    Button("Merge Scout File…") { beginImport(.scoutFile) }
+                    Button("Merge Scout Files…") { beginImport(.scoutFile) }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -315,7 +319,7 @@ private enum ImportKind {
 
 private struct ImportReport: Identifiable {
     let id = UUID()
-    let filename: String
+    let filenames: [String]
     let kind: ImportKind
     let outcome: ManualImportOutcome
 }
@@ -326,8 +330,9 @@ private struct ImportReportSheet: View {
 
     var body: some View {
         let issues = report.outcome.issues
+        let failures = report.outcome.failures
         let notes = report.outcome.merge.notes
-        let needsAttention = !issues.isEmpty || notes.contains(where: \.needsReview)
+        let needsAttention = !issues.isEmpty || !failures.isEmpty || notes.contains(where: \.needsReview)
 
         VStack(alignment: .leading, spacing: 14) {
             Label(title, systemImage: needsAttention ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
@@ -353,8 +358,18 @@ private struct ImportReportSheet: View {
                 .frame(minHeight: 120, maxHeight: 220)
             }
 
+            if !failures.isEmpty {
+                Text("Files not merged")
+                    .font(.headline)
+                List(failures, id: \.self) { failure in
+                    Text(failure)
+                        .textSelection(.enabled)
+                }
+                .frame(minHeight: 80, maxHeight: 160)
+            }
+
             if !notes.isEmpty {
-                Text("Entries both sides recorded differently")
+                Text("Entries recorded differently")
                     .font(.headline)
                 List(notes) { note in
                     MergeNoteRow(note: note)
@@ -379,7 +394,9 @@ private struct ImportReportSheet: View {
             return "Imported \(matchCount(merge.addedCount))"
         }
         if merge.addedCount == 0 && merge.updatedCount == 0 {
-            return "No new entries"
+            return report.outcome.failures.count == report.filenames.count && report.kind == .scoutFile
+                ? "Nothing merged"
+                : "No new entries"
         }
         var parts: [String] = []
         if merge.addedCount > 0 { parts.append("added \(matchCount(merge.addedCount))") }
@@ -389,7 +406,10 @@ private struct ImportReportSheet: View {
     }
 
     private var detail: String {
-        var text = "From \(report.filename)."
+        let names = report.filenames
+        var text = names.count == 1
+            ? "From \(names[0])."
+            : "From \(names.count) files, merged in name order: \(names.sorted { $0.localizedStandardCompare($1) == .orderedAscending }.joined(separator: ", "))."
         if report.outcome.usedMatchDetailsFormat {
             text += " This is a FIRST Events Match Details file, so its matches were added as totals only."
         }
@@ -428,9 +448,10 @@ private struct MergeNoteRow: View {
     }
 
     private var outcome: String {
-        let keptSide = note.kept == .incoming ? "the file’s" : "this Mac’s"
-        let otherSide = note.kept == .incoming ? "this Mac’s" : "the file’s"
-        return "Kept \(keptSide) entry (\(describe(note.keptEdit))) over \(otherSide) (\(describe(note.replacedEdit)))."
+        let file = note.sourceName.map { "\($0)’s" } ?? "the file’s"
+        return note.kept == .incoming
+            ? "Kept \(file) entry (\(describe(note.keptEdit))) over the existing one (\(describe(note.replacedEdit)))."
+            : "Kept the existing entry (\(describe(note.keptEdit))) over \(file) (\(describe(note.replacedEdit)))."
     }
 
     private func describe(_ edit: ManualEdit?) -> String {

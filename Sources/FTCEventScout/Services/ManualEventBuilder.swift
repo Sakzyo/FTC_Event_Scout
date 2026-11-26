@@ -15,8 +15,28 @@ enum ManualEventBuilder {
             mode: .manual,
             standings: standings,
             matches: matches,
+            teamCycleAverages: cycleAverages(for: event),
             statusMessage: "\(standings.count) teams, \(scoredCount) scored of \(matches.count) matches."
         )
+    }
+
+    /// Each team's average hive cycles (auto plus teleop) over the scored matches recorded
+    /// per team, qualification and playoff alike. A match where the team's cycles were left
+    /// at zero counts as zero cycles.
+    static func cycleAverages(for event: ManualEvent) -> [Int: Double] {
+        guard event.supportsDetailedEntry else { return [:] }
+        var totals: [Int: (cycles: Int, matches: Int)] = [:]
+        for match in event.matches where match.isScored
+            && match.entryStyle == .detailed
+            && match.recording == .perTeam
+            && !match.redTeams.isEmpty && !match.blueTeams.isEmpty {
+            for team in Set(match.redTeams + match.blueTeams) {
+                guard let entry = match.teamEntry(for: team) else { continue }
+                totals[team, default: (0, 0)].cycles += entry.autoHiveCycles + entry.teleopHiveCycles
+                totals[team, default: (0, 0)].matches += 1
+            }
+        }
+        return totals.mapValues { Double($0.cycles) / Double($0.matches) }
     }
 
     /// Matches with at least one team per alliance; incomplete rows stay in the editor only.

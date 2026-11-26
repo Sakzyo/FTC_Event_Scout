@@ -248,8 +248,10 @@ enum ManualEventMerge {
         let replacedEdit: ManualEdit?
         /// Set when the head scout should check the result, such as teams that differ.
         let reviewReason: String?
+        /// The file the entry came from, when several files are merged at once.
+        var sourceName: String?
 
-        var id: String { "\(matchTitle)|\(piece.key)" }
+        var id: String { "\(sourceName ?? "")|\(matchTitle)|\(piece.key)" }
         var needsReview: Bool { reviewReason != nil }
     }
 
@@ -303,6 +305,43 @@ enum ManualEventMerge {
                 .sorted { $0.sortKey < $1.sortKey }
                 .map(\.id),
             notes: notes.sorted { ($0.matchKey, $0.id) < ($1.matchKey, $1.id) }
+        )
+    }
+
+    /// Merges several files one after another, in the order given. Counts and changed
+    /// matches compare the final result with `existing`; notes name the file they came from.
+    static func merge(existing: [ManualMatch], sources: [(name: String, matches: [ManualMatch])]) -> Result {
+        var matches = existing
+        var notes: [Note] = []
+        for source in sources {
+            let step = merge(existing: matches, incoming: source.matches)
+            matches = step.matches
+            notes += step.notes.map { note in
+                var note = note
+                note.sourceName = source.name
+                return note
+            }
+        }
+
+        let original = Dictionary(existing.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var addedCount = 0
+        var updatedCount = 0
+        var changed: [ManualMatch] = []
+        for match in matches {
+            if let before = original[match.id] {
+                guard before != match else { continue }
+                updatedCount += 1
+            } else {
+                addedCount += 1
+            }
+            changed.append(match)
+        }
+        return Result(
+            matches: matches,
+            addedCount: addedCount,
+            updatedCount: updatedCount,
+            changedMatchIDs: changed.sorted { $0.sortKey < $1.sortKey }.map(\.id),
+            notes: notes
         )
     }
 
@@ -383,7 +422,7 @@ enum ManualEventMerge {
             let kept: Note.Source = losingSchedule == incoming ? .existing : .incoming
             let differentTeams = !existing.schedule.hasSameTeams(as: incoming.schedule)
             let reason = differentTeams
-                ? "The teams differ. This Mac has \(existing.schedule.teamsText); the file has \(incoming.schedule.teamsText)."
+                ? "The teams differ. The event has \(existing.schedule.teamsText); the file has \(incoming.schedule.teamsText)."
                 : nil
             note(.schedule, kept: kept, reason: reason)
         }
@@ -437,7 +476,7 @@ enum ManualEventMerge {
                     kept: source == existing ? .incoming : .existing,
                     keptEdit: nil,
                     replacedEdit: source.edits[piece.key],
-                    reviewReason: "Team \(team.teamNumberText) is not in the merged match, so its entries from \(source == existing ? "this Mac" : "the file") were not kept."
+                    reviewReason: "Team \(team.teamNumberText) is not in the merged match, so its entries from \(source == existing ? "the event" : "the file") were not kept."
                 ))
             }
         }
@@ -453,6 +492,8 @@ struct ManualImportOutcome: Equatable {
     var issues: [ManualEventCSV.ImportIssue]
     var usedMatchDetailsFormat: Bool
     var merge: ManualEventMerge.Result
+    /// Scout files that could not be merged, each with the reason.
+    var failures: [String] = []
 }
 
 enum ManualScoutFileError: LocalizedError {
